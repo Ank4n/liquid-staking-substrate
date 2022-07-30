@@ -1,13 +1,13 @@
 [package]
-name = "pallet-template"
+name = "pallet-liquid-staking"
 version = "4.0.0-dev"
-description = "FRAME pallet template for defining custom runtime logic."
-authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+description = "FRAME pallet for liquid staking"
+authors = ["Ankan"]
 homepage = "https://substrate.io/"
 edition = "2021"
 license = "Unlicense"
 publish = false
-repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
+repository = "https://github.com/Ank4n/stayquid"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
