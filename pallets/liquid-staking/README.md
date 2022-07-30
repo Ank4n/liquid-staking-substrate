@@ -11,7 +11,7 @@
 - Users can vote on referenda using the tokens which are staked and managed by this pallet.
 
 ## Call
-- stake(amount)
-- unstake(amount)
-- claim_unstake(accountId)
+- stake(dot)
+- unstake(ldot)
+- claim_unstake(accountId) // anyone can do
 - update_params()
