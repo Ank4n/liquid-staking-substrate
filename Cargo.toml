@@ -2,6 +2,8 @@
 members = [
     "node",
     "pallets/liquid-staking",
+    "pallets/staking",
+    "pallets/democracy",
     "runtime",
 ]
 [profile.release]
