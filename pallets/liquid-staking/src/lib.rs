@@ -13,23 +13,31 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+use sp_staking::{EraIndex, SessionIndex};
+
 pub use pallet::*;
+
+pub type BalanceOf<T> = <T as Config>::Balance;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	// #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default)]
-	// pub struct Ledger {
-	// 	#[codec(compact)]
-	// 	pub staked: Balance,
-	// 	/// Corresponding to the unlocking of the subaccount's staking ledger on relaychain
-	// 	pub unlocking: Vec<UnlockChunk>,
-	// }
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_staking::Config {
+		type Balance: sp_runtime::traits::AtLeast32BitUnsigned
+			+ codec::FullCodec
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ sp_std::fmt::Debug
+			+ Default
+			+ From<u64>
+			+ TypeInfo
+			+ MaxEncodedLen;
+
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 

@@ -14,7 +14,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
-	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify},
+	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify, OpaqueKeys},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
 };
@@ -43,12 +43,6 @@ use pallet_transaction_payment::CurrencyAdapter;
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
-/// My Imports 
-pub use pallet_liquid_staking;
-pub use pallet_staking::StakerStatus;
-use sp_staking::SessionIndex;
-use frame_system::{EnsureRoot, EnsureSignedBy};
-
 /// An index to a block.
 pub type BlockNumber = u32;
 
@@ -67,6 +61,14 @@ pub type Index = u32;
 
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
+
+/// My Imports 
+pub use pallet_liquid_staking;
+pub use pallet_staking::StakerStatus;
+use sp_staking::SessionIndex;
+use frame_system::{EnsureRoot, EnsureSignedBy};
+use frame_election_provider_support::{onchain, SequentialPhragmen};
+type DummyValidatorId = AccountId;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -268,6 +270,7 @@ impl pallet_sudo::Config for Runtime {
 /// My configurations.
 impl pallet_liquid_staking::Config for Runtime {
 	type Event = Event;
+	type Balance = Balance;
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
@@ -290,11 +293,24 @@ parameter_types! {
 	pub const MaxNominations: u32 = 10;
 }
 
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Runtime;
+	type Solver = SequentialPhragmen<DummyValidatorId, Perbill>;
+	type DataProvider = Staking;
+	type WeightInfo = ();
+}
+
+pub struct StakingBenchmarkingConfig;
+impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
+	type MaxNominators = ConstU32<1000>;
+	type MaxValidators = ConstU32<1000>;
+}
 impl pallet_staking::Config for Runtime {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
-	type UnixTime = Timestamp;
+	type UnixTime = pallet_timestamp::Pallet<Runtime>;
 	type CurrencyToVote = U128CurrencyToVote;
 	type RewardRemainder = ();
 	type Event = Event;
@@ -309,15 +325,42 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = ();
-	type ElectionProvider = ();
-	type GenesisElectionProvider = ();
-	type VoterList = ();
+	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type GenesisElectionProvider = Self::ElectionProvider;
+	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type MaxUnlockingChunks = frame_support::traits::ConstU32<32>;
-	type BenchmarkingConfig = runtime_common::StakingBenchmarkingConfig;
-	// type OnStakerSlash = NominationPools;
-	// type WeightInfo = weights::pallet_staking::WeightInfo<Runtime>;
+	type BenchmarkingConfig = StakingBenchmarkingConfig;
+	type OnStakerSlash = ();
+	type WeightInfo = ();
 }
 
+impl pallet_session::historical::Config for Runtime {
+	type FullIdentification = pallet_staking::Exposure<AccountId, u128>;
+	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
+}
+
+impl_opaque_keys! {
+	pub struct MockSessionKeys {
+		pub aura_authority: pallet_aura::Pallet<Runtime>,
+	}
+}
+
+parameter_types! {
+	pub const Period: u32 = 1;
+	pub const Offset: u32 = 0;
+}
+
+impl pallet_session::Config for Runtime {
+	type Event = Event;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type ValidatorIdOf = pallet_staking::StashOf<Self>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
+	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type Keys = MockSessionKeys;
+	type WeightInfo = ();
+}
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime where
@@ -336,6 +379,8 @@ construct_runtime!(
 		// Include the custom logic from the pallet-template in the runtime.
 		LiquidStakingModule: pallet_liquid_staking,
 		Staking: pallet_staking::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Historical: pallet_session::historical::{Pallet},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
 
