@@ -2,7 +2,7 @@
 #![allow(clippy::unused_unit)]
 #![allow(clippy::too_many_arguments)]
 
-use frame_support::sp_runtime::traits::StaticLookup;
+use frame_support::{sp_runtime::traits::StaticLookup, transactional};
 pub use pallet::*;
 
 #[cfg(test)]
@@ -17,8 +17,36 @@ mod benchmarking;
 // use sp_staking::{EraIndex, SessionIndex};
 
 pub use pallet::*;
+use codec::{Decode, Encode, MaxEncodedLen};
+use orml_traits::MultiCurrency;
+use scale_info::TypeInfo;
+use sp_runtime::RuntimeDebug;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+
 
 pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
+
+// FIXME: should be in a common lib
+#[derive(
+	Encode,
+	Decode,
+	Eq,
+	PartialEq,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialOrd,
+	Ord,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub enum CurrencyId {
+	DOT,
+	LDOT,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -30,6 +58,18 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_staking::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		/// Multi-currency support
+		type Currency: MultiCurrency<
+			Self::AccountId,
+			CurrencyId = CurrencyId,
+			Balance = <Self as pallet_staking::Config>::CurrencyBalance,
+		>;
+		/// Staking Currency ID
+		#[pallet::constant]
+		type StakingCurrencyId: Get<CurrencyId>;
+		/// Liquid Currency ID
+		#[pallet::constant]
+		type LiquidCurrencyId: Get<CurrencyId>;
 	}
 
 	#[pallet::pallet]
@@ -64,9 +104,10 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
+		/// Amount of staking currency to bond and used
+		/// to mint the liquid currency
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[transactional]
 		pub fn bond_and_mint(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -92,6 +133,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[transactional]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -107,6 +149,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[transactional]
 		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin.clone())?;
 
