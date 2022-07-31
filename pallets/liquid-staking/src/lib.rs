@@ -2,6 +2,7 @@
 #![allow(clippy::unused_unit)]
 #![allow(clippy::too_many_arguments)]
 
+use frame_support::sp_runtime::traits::StaticLookup;
 pub use pallet::*;
 
 #[cfg(test)]
@@ -13,11 +14,11 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use sp_staking::{EraIndex, SessionIndex};
+// use sp_staking::{EraIndex, SessionIndex};
 
 pub use pallet::*;
 
-pub type BalanceOf<T> = <T as Config>::Balance;
+pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -28,16 +29,6 @@ pub mod pallet {
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_staking::Config {
-		type Balance: sp_runtime::traits::AtLeast32BitUnsigned
-			+ codec::FullCodec
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ Default
-			+ From<u64>
-			+ TypeInfo
-			+ MaxEncodedLen;
-
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
@@ -54,9 +45,9 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored(u32, T::AccountId),
+		BondAndMint(BalanceOf<T>, T::AccountId),
+		UnbondingAndBurn(BalanceOf<T>, T::AccountId),
+		Withdraw(T::AccountId),
 	}
 
 	// Errors inform users that something went wrong.
@@ -76,38 +67,55 @@ pub mod pallet {
 		/// An example dispatchable that takes a singles value as a parameter, writes the value to
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/v3/runtime/origins
-			let who = ensure_signed(origin)?;
+		pub fn bond_and_mint(
+			origin: OriginFor<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin.clone())?;
 
+			let controller_lookup: <T::Lookup as StaticLookup>::Source =
+				T::Lookup::unlookup(who.clone());
+
+			pallet_staking::Pallet::<T>::bond(
+				origin,
+				controller_lookup, // reward, stash and controller are same for simplicity
+				amount,
+				pallet_staking::RewardDestination::Controller,
+			)?;
 			// Update storage.
-			<Something<T>>::put(something);
+			<Something<T>>::put(5u32);
 
 			// Emit an event.
-			Self::deposit_event(Event::SomethingStored(something, who));
+			Self::deposit_event(Event::BondAndMint(amount, who));
 			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}
 
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		pub fn unbond(
+			origin: OriginFor<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin.clone())?;
 
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => return Err(Error::<T>::NoneValue.into()),
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(())
-				},
-			}
+			pallet_staking::Pallet::<T>::unbond(origin, amount)?;
+
+			// Emit an event.
+			Self::deposit_event(Event::UnbondingAndBurn(amount, who));
+			// Return a successful DispatchResultWithPostInfo
+			Ok(())
+		}
+
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin.clone())?;
+
+			let _ = pallet_staking::Pallet::<T>::withdraw_unbonded(origin, 0);
+
+			// Emit an event.
+			Self::deposit_event(Event::Withdraw(who));
+			// Return a successful DispatchResultWithPostInfo
+			Ok(())
 		}
 	}
 }

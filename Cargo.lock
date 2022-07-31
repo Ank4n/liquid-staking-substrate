@@ -3794,6 +3794,7 @@ dependencies = [
  "frame-system",
  "jsonrpsee",
  "node-stayquid-runtime",
+ "pallet-staking",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
