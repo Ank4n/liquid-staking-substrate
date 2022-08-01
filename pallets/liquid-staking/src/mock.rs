@@ -9,12 +9,14 @@ use sp_runtime::{
 	Perbill
 };
 
+use frame_system::{EnsureRoot, EnsureSigned};
+
 use primitives::{MintRate};
 use sp_staking::{EraIndex, SessionIndex};
 
 use frame_support::{
 	parameter_types, PalletId,
-	traits::{ConstU16, ConstU32, ConstU64, ConstU128, Nothing},
+	traits::{ConstU16, ConstU32, ConstU64, ConstU128, Nothing, EqualPrivilegeOnly},
 };
 use orml_currencies::BasicCurrencyAdapter;
 use orml_traits::parameter_type_with_key;
@@ -47,6 +49,8 @@ frame_support::construct_runtime!(
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},	
 		Currencies: orml_currencies::{Pallet, Call},
 		Tokens: orml_tokens::{Pallet, Storage, Event<T>, Config<T>},
+		Democracy: pallet_democracy::{Pallet, Storage, Config<T>, Event<T>, Call},
+		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -251,6 +255,64 @@ impl pallet_liquid_staking::Config for Test {
 	type DefaultMintRate = DefaultMintRate;
 	type BondThreshold = BondThreshold;
 	type UnbondThreshold = UnbondThreshold;
+}
+
+parameter_types! {
+	pub const LaunchPeriod: BlockNumber = 10;
+	pub const VotingPeriod: BlockNumber = 10;
+	pub const VoteLockingPeriod: BlockNumber = 10;
+	pub const FastTrackVotingPeriod: BlockNumber = 5;
+	pub const EnactmentPeriod: BlockNumber = 10;
+	pub const CooloffPeriod: BlockNumber = 10;
+	pub const MinimumDeposit: Balance = 10;
+	pub const MaxVotes: u32 = 10;
+	pub const MaxProposals: u32 = 10;
+	pub const PreimageByteDeposit: Balance = 10;
+	pub const InstantAllowed: bool = false;
+}
+impl pallet_democracy::Config for Test {
+	type Proposal = Call;
+	type Event = Event;
+	type Currency = Balances;
+	type EnactmentPeriod = EnactmentPeriod;
+	type LaunchPeriod = LaunchPeriod;
+	type VotingPeriod = VotingPeriod;
+	type VoteLockingPeriod = VoteLockingPeriod;
+	type FastTrackVotingPeriod = FastTrackVotingPeriod;
+	type MinimumDeposit = MinimumDeposit;
+	type ExternalOrigin = EnsureRoot<AccountId>;
+	type ExternalMajorityOrigin = EnsureRoot<AccountId>;
+	type ExternalDefaultOrigin = EnsureRoot<AccountId>;
+	type FastTrackOrigin = EnsureRoot<AccountId>;
+	type InstantOrigin = EnsureRoot<AccountId>;
+	type CancellationOrigin = EnsureRoot<AccountId>;
+	type CancelProposalOrigin = EnsureRoot<AccountId>;
+	type BlacklistOrigin = EnsureRoot<AccountId>;
+	type VetoOrigin = EnsureSigned<AccountId>;
+	type CooloffPeriod = CooloffPeriod;
+	type PreimageByteDeposit = PreimageByteDeposit;
+	type Slash = ();
+	type InstantAllowed = InstantAllowed;
+	type Scheduler = Scheduler;
+	type MaxVotes = MaxVotes;
+	type OperationalPreimageOrigin = EnsureSigned<AccountId>;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
+	type MaxProposals = MaxProposals;
+}
+
+impl pallet_scheduler::Config for Test {
+	type Event = Event;
+	type Origin = Origin;
+	type PalletsOrigin = OriginCaller;
+	type Call = Call;
+	type MaximumWeight = ();
+	type ScheduleOrigin = EnsureRoot<AccountId>;
+	type MaxScheduledPerBlock = ();
+	type WeightInfo = ();
+	type OriginPrivilegeCmp = EqualPrivilegeOnly; // TODO : Simplest type, maybe there is better ?
+	type PreimageProvider = ();
+	type NoPreimagePostponement = ();
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
