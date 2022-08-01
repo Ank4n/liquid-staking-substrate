@@ -27,31 +27,15 @@ use sp_runtime::{
 	ArithmeticError, FixedPointNumber, FixedPointOperand, FixedU128, RuntimeDebug,
 };
 
+pub use primitives::{MintRate};
+type CurrencyId = u32;
+
 pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
-pub type MintRate = FixedU128;
+
 // Waiting period before tokens are unlocked
 pub type UnbondWait<T> = <T as pallet_staking::Config>::BondingDuration;
 
-// FIXME: should be in a common lib
-#[derive(
-	Encode,
-	Decode,
-	Eq,
-	PartialEq,
-	Copy,
-	Clone,
-	RuntimeDebug,
-	PartialOrd,
-	Ord,
-	TypeInfo,
-	MaxEncodedLen,
-)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub enum CurrencyId {
-	DOT,
-	LDOT,
-}
+
 
 #[frame_support::pallet]
 pub mod pallet {

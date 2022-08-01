@@ -9,14 +9,29 @@ use sp_runtime::{
 	Perbill
 };
 
+use primitives::{MintRate};
 use sp_staking::{EraIndex, SessionIndex};
 
 use frame_support::{
-	parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, ConstU128},
+	parameter_types, PalletId,
+	traits::{ConstU16, ConstU32, ConstU64, ConstU128, Nothing},
 };
+use orml_currencies::BasicCurrencyAdapter;
+use orml_traits::parameter_type_with_key;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+
+type Balance = u128;
+pub type Amount = i128;
+pub type BlockNumber = u64;
+pub const RID_1: ReserveIdentifier = [1u8; 8];
+pub const RID_2: ReserveIdentifier = [2u8; 8];
+pub type ReserveIdentifier = [u8; 8];
+
+type CurrencyId = u32;
+pub const STAKING_CURRENCY_ID: CurrencyId = 1;
+pub const LIQUID_CURRENCY_ID: CurrencyId = 2;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -30,6 +45,8 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},	
+		Currencies: orml_currencies::{Pallet, Call},
+		Tokens: orml_tokens::{Pallet, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -49,7 +66,7 @@ impl system::Config for Test {
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
@@ -66,6 +83,39 @@ impl system::Config for Test {
 	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
+}
+
+parameter_types! {
+	pub const GetNativeCurrencyId: CurrencyId = STAKING_CURRENCY_ID;
+}
+
+impl orml_currencies::Config for Test {
+	type MultiCurrency = Tokens;
+	type NativeCurrency = BasicCurrencyAdapter<Test, Balances, Amount, BlockNumber>;
+	type GetNativeCurrencyId = GetNativeCurrencyId;
+	type WeightInfo = ();
+}
+
+parameter_type_with_key! {
+    pub ExistentialDeposits: |_currency_id: CurrencyId| -> Balance {
+        100
+    };
+}
+
+impl orml_tokens::Config for Test {
+	type Event = Event;
+	type Balance = Balance;
+	type Amount = Amount;
+	type CurrencyId = CurrencyId;
+	type WeightInfo = ();
+	type ExistentialDeposits = ExistentialDeposits;
+	type OnDust = ();
+	type OnNewTokenAccount = ();
+	type OnKilledTokenAccount = ();
+	type MaxLocks = ConstU32<2>;
+	type MaxReserves = ConstU32<2>;
+	type ReserveIdentifier = ReserveIdentifier;
+	type DustRemovalWhitelist = Nothing;
 }
 
 pub struct TestSessionHandler;
@@ -111,12 +161,12 @@ impl pallet_session::historical::Config for Test {
 
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
-	type Balance = u128;
+	type MaxReserves = ConstU32<2>;
+	type ReserveIdentifier = ReserveIdentifier;
+	type Balance = Balance;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = ConstU128<1>;
+	type ExistentialDeposit = ConstU128<2>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -182,9 +232,25 @@ impl pallet_staking::Config for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub const StakingCurrencyId: CurrencyId = STAKING_CURRENCY_ID;
+	pub const LiquidCurrencyId: CurrencyId = LIQUID_CURRENCY_ID;
+	pub const MyPalletId: PalletId = PalletId(*b"palletls");
+	pub DefaultMintRate: MintRate = MintRate::from_inner(10);
+	pub const UnBondWait: EraIndex = 28;
+	pub static BondThreshold: Balance = 0;
+	pub static UnbondThreshold: Balance = 0;
+}
 
 impl pallet_liquid_staking::Config for Test {
 	type Event = Event;
+	type PalletId = MyPalletId;
+	type Currency = Currencies;
+	type StakingCurrencyId = StakingCurrencyId;
+	type LiquidCurrencyId = LiquidCurrencyId;
+	type DefaultMintRate = DefaultMintRate;
+	type BondThreshold = BondThreshold;
+	type UnbondThreshold = UnbondThreshold;
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -195,6 +261,7 @@ where
 	type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 }
 
+// TODO build balances
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
