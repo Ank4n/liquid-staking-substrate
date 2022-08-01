@@ -105,11 +105,16 @@ pub mod pallet {
 	#[pallet::getter(fn total_liquid_issuance)]
 	pub type TotalLiquidIssuance<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
-	/// Unbonding requests: AccountId => (Amount, Era Index)
+	/// Unbonding requests: AccountId => (Staking amount, Liquid amount, Era Index)
 	#[pallet::storage]
 	#[pallet::getter(fn unbonding_requests)]
-	pub type UnbondingRequests<T: Config> =
-	StorageMap<_, Twox64Concat, T::AccountId, (BalanceOf<T>, EraIndex), OptionQuery>;
+	pub type UnbondingRequests<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		(BalanceOf<T>, BalanceOf<T>, EraIndex),
+		OptionQuery,
+	>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
@@ -128,10 +133,14 @@ pub mod pallet {
 		BelowBondThreshold,
 		/// The unbond amount in Liquid currency is below threshold
 		BelowUnbondThreshold,
-		/// User already has a redeem request that has not been claimed yet 
+		/// User already has a redeem request that has not been claimed yet
 		UnclaimedRedeemRequestAlreadyExist,
 		/// Era not set by the session
 		CurrentEraNotSet,
+		/// Unbonding request not found for the claim
+		UnbondingRequestNotExist,
+		/// Unbonding period has not elapsed
+		UnbondingWaitNotComplete,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -172,12 +181,13 @@ pub mod pallet {
 				pallet_staking::RewardDestination::Controller,
 			)?;
 
-			let liquid_amount = Self::mint_liquid(amount)?;
+			let liquid_amount = Self::staking_to_liquid(amount)?;
 			<T as pallet::Config>::Currency::deposit(
 				T::LiquidCurrencyId::get(),
 				&staker,
 				liquid_amount,
 			)?;
+
 			TotalLiquidIssuance::<T>::mutate(|total| *total = total.saturating_add(liquid_amount));
 
 			// Emit an event.
@@ -193,14 +203,23 @@ pub mod pallet {
 			#[pallet::compact] amount: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin.clone())?;
-			
-			let alreadyRequested = UnbondingRequests::<T>::contains_key(&who);
-			ensure!(!alreadyRequested, Error::<T>::UnclaimedRedeemRequestAlreadyExist);
+
+			let already_requested = UnbondingRequests::<T>::contains_key(&who);
+			ensure!(!already_requested, Error::<T>::UnclaimedRedeemRequestAlreadyExist);
 			let current_era = pallet_staking::Pallet::<T>::current_era();
 			ensure!(current_era.is_some(), Error::<T>::CurrentEraNotSet);
 
+			let _ = <T as pallet::Config>::Currency::transfer(
+				T::LiquidCurrencyId::get(),
+				&who,
+				&Self::account_id(),
+				amount,
+			);
+
+			// no rewards/slash are counted once unbonding is requested
+			let staking_amount = Self::liquid_to_staking(amount)?;
 			// can unwrap as we checked previously current era exists
-			UnbondingRequests::<T>::insert(&who, (amount, current_era.unwrap()));
+			UnbondingRequests::<T>::insert(&who, (staking_amount, amount, current_era.unwrap()));
 			// unbond funds from pot account
 			pallet_staking::Pallet::<T>::unbond(origin, amount)?;
 
@@ -214,9 +233,46 @@ pub mod pallet {
 		#[transactional]
 		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin.clone())?;
+			// Get the unbonding request
+			let unbonding_request = UnbondingRequests::<T>::get(&who);
 
-			let _ = pallet_staking::Pallet::<T>::withdraw_unbonded(origin, 0);
+			ensure!(unbonding_request.is_some(), Error::<T>::UnbondingRequestNotExist);
+			let (stake_amount, liquid_amount, old_era) = unbonding_request.unwrap();
 
+			let current_era = Self::current_era();
+			ensure!(current_era.is_some(), Error::<T>::CurrentEraNotSet);
+
+			let unbond_wait = UnbondWait::<T>::get(); 
+			
+			ensure!(old_era + unbond_wait < current_era.unwrap(), Error::<T>::UnbondingWaitNotComplete);
+			
+			let pot_account = Self::account_id();
+			let pot_free_balance = <T as pallet::Config>::Currency::free_balance(
+				T::StakingCurrencyId::get(),
+				&pot_account,
+			);
+
+			if pot_free_balance < stake_amount {
+				let _ = pallet_staking::Pallet::<T>::withdraw_unbonded(origin, 0);
+			}
+
+			// burn liquid amount
+			<T as pallet::Config>::Currency::withdraw(
+				T::LiquidCurrencyId::get(),
+				&pot_account,
+				liquid_amount,
+			)?;
+
+			// transfer redeemed_staking to redeemer.
+			<T as pallet::Config>::Currency::transfer(
+				T::StakingCurrencyId::get(),
+				&pot_account,
+				&who,
+				stake_amount,
+			)?;
+
+			TotalLiquidIssuance::<T>::mutate(|total| *total = total.saturating_sub(liquid_amount));
+			
 			// Emit an event.
 			Self::deposit_event(Event::Withdraw(who));
 			// Return a successful result
@@ -226,15 +282,28 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T>
 	where
-		BalanceOf<T>: FixedPointOperand, {
+		BalanceOf<T>: FixedPointOperand,
+	{
 		/// Module account id
 		pub fn account_id() -> T::AccountId {
 			T::PalletId::get().into_account_truncating()
 		}
 
-		pub fn mint_liquid(staking_amount: BalanceOf<T>) -> Result<BalanceOf<T>, DispatchError> {
+		pub fn staking_to_liquid(
+			staking_amount: BalanceOf<T>,
+		) -> Result<BalanceOf<T>, DispatchError> {
 			Self::current_mint_rate()
 				.checked_mul_int(staking_amount)
+				.ok_or(DispatchError::Arithmetic(ArithmeticError::Overflow))
+		}
+
+		pub fn liquid_to_staking(
+			liquid_amount: BalanceOf<T>,
+		) -> Result<BalanceOf<T>, DispatchError> {
+			Self::current_mint_rate()
+				.reciprocal()
+				.expect("shouldn't be invalid!")
+				.checked_mul_int(liquid_amount)
 				.ok_or(DispatchError::Arithmetic(ArithmeticError::Overflow))
 		}
 
@@ -253,6 +322,10 @@ pub mod pallet {
 				MintRate::checked_from_rational(total_staking, total_liquid)
 					.unwrap_or_else(T::DefaultMintRate::get)
 			}
+		}
+
+		pub fn current_era() -> Option<EraIndex> {
+			pallet_staking::Pallet::<T>::current_era()
 		}
 	}
 }
