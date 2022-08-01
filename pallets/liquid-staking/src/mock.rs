@@ -4,7 +4,7 @@ use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::Header,
+	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, IdentityLookup},
 	Perbill,
 };
@@ -17,7 +17,7 @@ use sp_staking::{EraIndex, SessionIndex};
 use crate::mock::sp_api_hidden_includes_construct_runtime::hidden_include::traits::GenesisBuild;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing},
+	traits::{ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing, OneSessionHandler},
 	PalletId,
 };
 use orml_currencies::BasicCurrencyAdapter;
@@ -126,25 +126,35 @@ impl orml_tokens::Config for Test {
 	type DustRemovalWhitelist = Nothing;
 }
 
-pub struct TestSessionHandler;
-impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+/// Another session handler struct to test on_disabled.
+pub struct OtherSessionHandler;
+impl OneSessionHandler<AccountId> for OtherSessionHandler {
+	type Key = UintAuthorityId;
 
-	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
-
-	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(
-		_: bool,
-		_: &[(AccountId, Ks)],
-		_: &[(AccountId, Ks)],
-	) {
+	fn on_genesis_session<'a, I: 'a>(_: I)
+	where
+		I: Iterator<Item = (&'a AccountId, Self::Key)>,
+		AccountId: 'a,
+	{
 	}
 
-	fn on_disabled(_: u32) {}
+	fn on_new_session<'a, I: 'a>(_: bool, _: I, _: I)
+	where
+		I: Iterator<Item = (&'a AccountId, Self::Key)>,
+		AccountId: 'a,
+	{
+	}
+
+	fn on_disabled(_validator_index: u32) {}
+}
+
+impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
+	type Public = UintAuthorityId;
 }
 
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
-		pub foo: sp_runtime::testing::UintAuthorityId,
+		pub other: OtherSessionHandler,
 	}
 }
 
@@ -155,7 +165,7 @@ impl pallet_session::Config for Test {
 	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
-	type SessionHandler = TestSessionHandler;
+	type SessionHandler = (OtherSessionHandler,);
 	type Keys = SessionKeys;
 	type WeightInfo = ();
 }
@@ -412,8 +422,16 @@ impl ExtBuilder {
 		}
 		.assimilate_storage(&mut t);
 
-		let _ = pallet_session::GenesisConfig::<Test> { ..Default::default() }
-			.assimilate_storage(&mut t);
+		let _ = pallet_session::GenesisConfig::<Test> {
+			keys: stakers
+				.into_iter()
+				.map(|(id, ..)| (id, id, SessionKeys { other: id.into() }))
+				.collect(),
+		}
+		.assimilate_storage(&mut t);
+
+		// let _ = pallet_session::GenesisConfig::<Test> { ..Default::default() }
+		// 	.assimilate_storage(&mut t);
 
 		t.into()
 	}
