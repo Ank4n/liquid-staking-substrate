@@ -3,20 +3,22 @@ use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
+	curve::PiecewiseLinear,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	curve::PiecewiseLinear,
-	Perbill
+	Perbill,
 };
 
 use frame_system::{EnsureRoot, EnsureSigned};
 
-use primitives::{MintRate};
+use primitives::MintRate;
 use sp_staking::{EraIndex, SessionIndex};
 
+use crate::mock::sp_api_hidden_includes_construct_runtime::hidden_include::traits::GenesisBuild;
 use frame_support::{
-	parameter_types, PalletId,
-	traits::{ConstU16, ConstU32, ConstU64, ConstU128, Nothing, EqualPrivilegeOnly},
+	parameter_types,
+	traits::{ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing},
+	PalletId,
 };
 use orml_currencies::BasicCurrencyAdapter;
 use orml_traits::parameter_type_with_key;
@@ -34,6 +36,9 @@ pub type ReserveIdentifier = [u8; 8];
 type CurrencyId = u32;
 pub const STAKING_CURRENCY_ID: CurrencyId = 1;
 pub const LIQUID_CURRENCY_ID: CurrencyId = 2;
+pub const ALICE: AccountId = 1;
+pub const BOB: AccountId = 2;
+pub const CHARLIE: AccountId = 3;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -43,17 +48,16 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		LiquidStakingModule: pallet_liquid_staking::{Pallet, Call, Storage, Event<T>},
+		LiquidStaking: pallet_liquid_staking::{Pallet, Call, Storage, Event<T>},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},	
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Currencies: orml_currencies::{Pallet, Call},
 		Tokens: orml_tokens::{Pallet, Storage, Event<T>, Config<T>},
 		Democracy: pallet_democracy::{Pallet, Storage, Config<T>, Event<T>, Call},
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
 	}
 );
-
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -101,9 +105,9 @@ impl orml_currencies::Config for Test {
 }
 
 parameter_type_with_key! {
-    pub ExistentialDeposits: |_currency_id: CurrencyId| -> Balance {
-        100
-    };
+	pub ExistentialDeposits: |_currency_id: CurrencyId| -> Balance {
+		100
+	};
 }
 
 impl orml_tokens::Config for Test {
@@ -156,8 +160,6 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
-
-
 impl pallet_session::historical::Config for Test {
 	type FullIdentification = pallet_staking::Exposure<u64, u128>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
@@ -198,6 +200,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+	pub static ExistentialDeposit: Balance = 1;
 }
 
 pub struct OnChainSeqPhragmen;
@@ -323,7 +326,99 @@ where
 	type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 }
 
-// TODO build balances
+pub use pallet_staking::StakerStatus;
+pub struct ExtBuilder {
+	balances: Vec<(AccountId, CurrencyId, Balance)>,
+}
+
+impl ExtBuilder {
+	pub fn balances(mut self, balances: Vec<(AccountId, CurrencyId, Balance)>) -> Self {
+		self.balances = balances;
+		self
+	}
+
+	pub fn default_balances(self) -> Self {
+		self.balances(vec![
+			(1, STAKING_CURRENCY_ID, 100),
+			(2, STAKING_CURRENCY_ID, 100),
+			(1, LIQUID_CURRENCY_ID, 100),
+			(2, LIQUID_CURRENCY_ID, 100),
+			(3, STAKING_CURRENCY_ID, 300),
+			(4, STAKING_CURRENCY_ID, 400),
+			// controllers
+			(10, STAKING_CURRENCY_ID, 1),
+			(20, STAKING_CURRENCY_ID, 1),
+			(30, STAKING_CURRENCY_ID, 1),
+			(40, STAKING_CURRENCY_ID, 1),
+			// stashes
+			(11, STAKING_CURRENCY_ID, 1000),
+			(21, STAKING_CURRENCY_ID, 2000),
+			(31, STAKING_CURRENCY_ID, 3000),
+			(41, STAKING_CURRENCY_ID, 3000),
+			// nominators
+			(100, STAKING_CURRENCY_ID, 1000),
+			(101, STAKING_CURRENCY_ID, 1000),
+			(102, STAKING_CURRENCY_ID, 2000),
+			(103, STAKING_CURRENCY_ID, 3000),
+		])
+	}
+
+	pub fn build(self) -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+		pallet_balances::GenesisConfig::<Test> {
+			balances: self
+				.balances
+				.clone()
+				.into_iter()
+				.filter(|(_, currency_id, _)| *currency_id == STAKING_CURRENCY_ID)
+				.map(|(account_id, _, initial_balance)| (account_id, initial_balance))
+				.collect::<Vec<_>>(),
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
+
+		orml_tokens::GenesisConfig::<Test> {
+			balances: self
+				.balances
+				.into_iter()
+				.filter(|(_, currency_id, _)| *currency_id != STAKING_CURRENCY_ID)
+				.collect::<Vec<_>>(),
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
+
+		let stakers = vec![
+			// (stash, ctrl, stake, status)
+			// these two will be elected in the default test where we elect 2.
+			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
+			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+			// a loser validator
+			(31, 30, 500, StakerStatus::<AccountId>::Validator),
+			// an idle validator
+			(41, 40, 1000, StakerStatus::<AccountId>::Idle),
+			(101, 100, 500, StakerStatus::<AccountId>::Nominator(vec![11, 21])),
+		];
+
+		let _ = pallet_staking::GenesisConfig::<Test> {
+			stakers: stakers.clone(),
+			validator_count: 3,
+			minimum_validator_count: 0,
+			invulnerables: vec![],
+			slash_reward_fraction: Perbill::from_percent(10),
+			min_nominator_bond: ExistentialDeposit::get(),
+			min_validator_bond: ExistentialDeposit::get(),
+			..Default::default()
+		}
+		.assimilate_storage(&mut t);
+
+		let _ = pallet_session::GenesisConfig::<Test> { ..Default::default() }
+			.assimilate_storage(&mut t);
+
+		t.into()
+	}
+}
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
