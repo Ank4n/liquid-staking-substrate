@@ -14,7 +14,7 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-// use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::{EraIndex, SessionIndex};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use orml_traits::MultiCurrency;
@@ -29,6 +29,8 @@ use sp_runtime::{
 
 pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
 pub type MintRate = FixedU128;
+// Waiting period before tokens are unlocked
+pub type UnbondWait<T> = <T as pallet_staking::Config>::BondingDuration;
 
 // FIXME: should be in a common lib
 #[derive(
@@ -98,14 +100,16 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	pub type Something<T> = StorageValue<_, u32>;
-
 	/// The total amount of issued liquid currency.
 	#[pallet::storage]
 	#[pallet::getter(fn total_liquid_issuance)]
 	pub type TotalLiquidIssuance<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	/// Unbonding requests: AccountId => (Amount, Era Index)
+	#[pallet::storage]
+	#[pallet::getter(fn unbonding_requests)]
+	pub type UnbondingRequests<T: Config> =
+	StorageMap<_, Twox64Concat, T::AccountId, (BalanceOf<T>, EraIndex), OptionQuery>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
@@ -113,7 +117,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		BondAndMint(BalanceOf<T>, T::AccountId),
-		UnbondingAndBurn(BalanceOf<T>, T::AccountId),
+		RequestUnbond(BalanceOf<T>, T::AccountId),
 		Withdraw(T::AccountId),
 	}
 
@@ -124,6 +128,10 @@ pub mod pallet {
 		BelowBondThreshold,
 		/// The unbond amount in Liquid currency is below threshold
 		BelowUnbondThreshold,
+		/// User already has a redeem request that has not been claimed yet 
+		UnclaimedRedeemRequestAlreadyExist,
+		/// Era not set by the session
+		CurrentEraNotSet,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -174,23 +182,31 @@ pub mod pallet {
 
 			// Emit an event.
 			Self::deposit_event(Event::BondAndMint(amount, staker));
-			// Return a successful DispatchResultWithPostInfo
+			// Return a successful result
 			Ok(())
 		}
 
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		#[transactional]
-		pub fn unbond(
+		pub fn request_unbond(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin.clone())?;
+			
+			let alreadyRequested = UnbondingRequests::<T>::contains_key(&who);
+			ensure!(!alreadyRequested, Error::<T>::UnclaimedRedeemRequestAlreadyExist);
+			let current_era = pallet_staking::Pallet::<T>::current_era();
+			ensure!(current_era.is_some(), Error::<T>::CurrentEraNotSet);
 
+			// can unwrap as we checked previously current era exists
+			UnbondingRequests::<T>::insert(&who, (amount, current_era.unwrap()));
+			// unbond funds from pot account
 			pallet_staking::Pallet::<T>::unbond(origin, amount)?;
 
 			// Emit an event.
-			Self::deposit_event(Event::UnbondingAndBurn(amount, who));
-			// Return a successful DispatchResultWithPostInfo
+			Self::deposit_event(Event::RequestUnbond(amount, who));
+			// Return a successful result
 			Ok(())
 		}
 
@@ -203,7 +219,7 @@ pub mod pallet {
 
 			// Emit an event.
 			Self::deposit_event(Event::Withdraw(who));
-			// Return a successful DispatchResultWithPostInfo
+			// Return a successful result
 			Ok(())
 		}
 	}
@@ -218,14 +234,13 @@ pub mod pallet {
 
 		pub fn mint_liquid(staking_amount: BalanceOf<T>) -> Result<BalanceOf<T>, DispatchError> {
 			Self::current_mint_rate()
-				//FIXME how to multiply
 				.checked_mul_int(staking_amount)
 				.ok_or(DispatchError::Arithmetic(ArithmeticError::Overflow))
 		}
 
 		/// Calculate mint rate
 		/// total_liquid_amount / total_staking_amount
-		/// If mint rate cannot be calculated, T::DefaultExchangeRate is used.
+		/// If mint rate cannot be calculated, T::DefaultMintRate is used.
 		pub fn current_mint_rate() -> MintRate {
 			let total_staking = <T as pallet::Config>::Currency::total_balance(
 				T::StakingCurrencyId::get(),
