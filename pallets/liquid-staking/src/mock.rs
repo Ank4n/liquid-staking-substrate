@@ -17,7 +17,9 @@ use sp_staking::{EraIndex, SessionIndex};
 use crate::mock::sp_api_hidden_includes_construct_runtime::hidden_include::traits::GenesisBuild;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing, OneSessionHandler},
+	traits::{
+		ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing, OneSessionHandler,
+	},
 	PalletId,
 };
 use orml_currencies::BasicCurrencyAdapter;
@@ -49,12 +51,14 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		LiquidStaking: pallet_liquid_staking::{Pallet, Call, Storage, Event<T>},
-		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Currencies: orml_currencies::{Pallet, Call},
 		Tokens: orml_tokens::{Pallet, Storage, Event<T>, Config<T>},
 		Democracy: pallet_democracy::{Pallet, Storage, Config<T>, Event<T>, Call},
+		Historical: pallet_session::historical::{Pallet, Storage},
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -62,6 +66,8 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
+	pub static Period: BlockNumber = 5;
+	pub static Offset: BlockNumber = 0;
 }
 
 type AccountId = u64;
@@ -106,7 +112,7 @@ impl orml_currencies::Config for Test {
 
 parameter_type_with_key! {
 	pub ExistentialDeposits: |_currency_id: CurrencyId| -> Balance {
-		100
+		1
 	};
 }
 
@@ -159,20 +165,20 @@ sp_runtime::impl_opaque_keys! {
 }
 
 impl pallet_session::Config for Test {
-	type Event = Event;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type ValidatorIdOf = pallet_staking::StashOf<Self>;
-	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
-	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
-	type SessionHandler = (OtherSessionHandler,);
+	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type SessionHandler = (OtherSessionHandler,);
+	type Event = Event;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = pallet_staking::StashOf<Test>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<u64, u128>;
-	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
+	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
 
 impl pallet_balances::Config for Test {
@@ -341,13 +347,19 @@ pub struct ExtBuilder {
 	balances: Vec<(AccountId, CurrencyId, Balance)>,
 }
 
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self { balances: vec![] }
+	}
+}
+
 impl ExtBuilder {
 	pub fn balances(mut self, balances: Vec<(AccountId, CurrencyId, Balance)>) -> Self {
 		self.balances = balances;
 		self
 	}
 
-	pub fn default_balances(self) -> Self {
+	pub fn topup_balances(self) -> Self {
 		self.balances(vec![
 			(1, STAKING_CURRENCY_ID, 100),
 			(2, STAKING_CURRENCY_ID, 100),
@@ -356,12 +368,12 @@ impl ExtBuilder {
 			(3, STAKING_CURRENCY_ID, 300),
 			(4, STAKING_CURRENCY_ID, 400),
 			// controllers
-			(10, STAKING_CURRENCY_ID, 1),
-			(20, STAKING_CURRENCY_ID, 1),
-			(30, STAKING_CURRENCY_ID, 1),
-			(40, STAKING_CURRENCY_ID, 1),
+			(10, STAKING_CURRENCY_ID, 10),
+			(20, STAKING_CURRENCY_ID, 10),
+			(30, STAKING_CURRENCY_ID, 10),
+			(40, STAKING_CURRENCY_ID, 10),
 			// stashes
-			(11, STAKING_CURRENCY_ID, 1000),
+			(11, STAKING_CURRENCY_ID, 2000),
 			(21, STAKING_CURRENCY_ID, 2000),
 			(31, STAKING_CURRENCY_ID, 3000),
 			(41, STAKING_CURRENCY_ID, 3000),
@@ -401,18 +413,18 @@ impl ExtBuilder {
 		let stakers = vec![
 			// (stash, ctrl, stake, status)
 			// these two will be elected in the default test where we elect 2.
-			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
-			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+			(11, 10, 100, StakerStatus::<AccountId>::Validator),
+			(21, 20, 100, StakerStatus::<AccountId>::Validator),
 			// a loser validator
-			(31, 30, 500, StakerStatus::<AccountId>::Validator),
+			(31, 30, 50, StakerStatus::<AccountId>::Validator),
 			// an idle validator
-			(41, 40, 1000, StakerStatus::<AccountId>::Idle),
-			(101, 100, 500, StakerStatus::<AccountId>::Nominator(vec![11, 21])),
+			(41, 40, 100, StakerStatus::<AccountId>::Idle),
+			(101, 100, 50, StakerStatus::<AccountId>::Nominator(vec![11, 21])),
 		];
 
 		let _ = pallet_staking::GenesisConfig::<Test> {
 			stakers: stakers.clone(),
-			validator_count: 3,
+			validator_count: 2,
 			minimum_validator_count: 0,
 			invulnerables: vec![],
 			slash_reward_fraction: Perbill::from_percent(10),
@@ -429,9 +441,6 @@ impl ExtBuilder {
 				.collect(),
 		}
 		.assimilate_storage(&mut t);
-
-		// let _ = pallet_session::GenesisConfig::<Test> { ..Default::default() }
-		// 	.assimilate_storage(&mut t);
 
 		t.into()
 	}
