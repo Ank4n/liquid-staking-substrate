@@ -1,20 +1,35 @@
-use crate::{mock::*, Error};
+#![cfg(test)]
+
+use super::*;
 use frame_support::{assert_noop, assert_ok};
+use mock::{Event, *};
+use sp_runtime::traits::BadOrigin;
+use orml_traits::MultiReservableCurrency;
 
 #[test]
-fn it_works_for_default_value() {
+fn total_issuance() {
 	ExtBuilder::default()
 		.topup_balances()
 		.build()
 		.execute_with(|| {
-			assert_eq!(1, 1);
+			assert_eq!(Currencies::total_issuance(STAKING_CURRENCY_ID), 16400);
+			assert_eq!(Currencies::total_issuance(LIQUID_CURRENCY_ID), 2000);
 		});
 }
 
 #[test]
-fn correct_error_for_none_value() {
-	new_test_ext().execute_with(|| {
-		// Ensure the expected error is thrown when no value is present.
-		// assert_noop!(LiquidStakingModule::cause_error(Origin::signed(1)), Error::<Test>::NoneValue);
+fn bonding_works() {
+	ExtBuilder::default()
+		.topup_balances()
+		.build()
+		.execute_with(|| {
+		
+		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &101), 1000);
+		assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 0);
+		
+		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
+		
+		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &101), 800);
+		// assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 2000);
 	});
 }

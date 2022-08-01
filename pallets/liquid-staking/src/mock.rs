@@ -38,9 +38,6 @@ pub type ReserveIdentifier = [u8; 8];
 type CurrencyId = u32;
 pub const STAKING_CURRENCY_ID: CurrencyId = 1;
 pub const LIQUID_CURRENCY_ID: CurrencyId = 2;
-pub const ALICE: AccountId = 1;
-pub const BOB: AccountId = 2;
-pub const CHARLIE: AccountId = 3;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -361,27 +358,27 @@ impl ExtBuilder {
 
 	pub fn topup_balances(self) -> Self {
 		self.balances(vec![
-			(1, STAKING_CURRENCY_ID, 100),
-			(2, STAKING_CURRENCY_ID, 100),
-			(1, LIQUID_CURRENCY_ID, 100),
-			(2, LIQUID_CURRENCY_ID, 100),
-			(3, STAKING_CURRENCY_ID, 300),
-			(4, STAKING_CURRENCY_ID, 400),
+			(1, STAKING_CURRENCY_ID, 1000),
+			(2, STAKING_CURRENCY_ID, 1000),
+			(1, LIQUID_CURRENCY_ID, 1000),
+			(2, LIQUID_CURRENCY_ID, 1000),
+			(3, STAKING_CURRENCY_ID, 1000),
+			(4, STAKING_CURRENCY_ID, 1000),
 			// controllers
-			(10, STAKING_CURRENCY_ID, 10),
-			(20, STAKING_CURRENCY_ID, 10),
-			(30, STAKING_CURRENCY_ID, 10),
-			(40, STAKING_CURRENCY_ID, 10),
+			(10, STAKING_CURRENCY_ID, 100),
+			(20, STAKING_CURRENCY_ID, 100),
+			(30, STAKING_CURRENCY_ID, 100),
+			(40, STAKING_CURRENCY_ID, 100),
 			// stashes
 			(11, STAKING_CURRENCY_ID, 2000),
 			(21, STAKING_CURRENCY_ID, 2000),
-			(31, STAKING_CURRENCY_ID, 3000),
-			(41, STAKING_CURRENCY_ID, 3000),
+			(31, STAKING_CURRENCY_ID, 2000),
+			(41, STAKING_CURRENCY_ID, 2000),
 			// nominators
 			(100, STAKING_CURRENCY_ID, 1000),
 			(101, STAKING_CURRENCY_ID, 1000),
-			(102, STAKING_CURRENCY_ID, 2000),
-			(103, STAKING_CURRENCY_ID, 3000),
+			(102, STAKING_CURRENCY_ID, 1000),
+			(103, STAKING_CURRENCY_ID, 1000),
 		])
 	}
 
@@ -419,7 +416,7 @@ impl ExtBuilder {
 			(31, 30, 50, StakerStatus::<AccountId>::Validator),
 			// an idle validator
 			(41, 40, 100, StakerStatus::<AccountId>::Idle),
-			(101, 100, 50, StakerStatus::<AccountId>::Nominator(vec![11, 21])),
+			(100, 100, 50, StakerStatus::<AccountId>::Nominator(vec![11, 21])),
 		];
 
 		let _ = pallet_staking::GenesisConfig::<Test> {
@@ -444,9 +441,4 @@ impl ExtBuilder {
 
 		t.into()
 	}
-}
-
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
