@@ -166,7 +166,7 @@ pub mod pallet {
 
 			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
 
-			// FIXME Bond some in genesis config 
+			// FIXME Bond some in genesis config
 			// so never have to bond again and not check ledger
 			let ledger = pallet_staking::Pallet::<T>::ledger(&pot_account);
 			if ledger.is_some() {
@@ -239,7 +239,9 @@ pub mod pallet {
 			// can unwrap as we checked previously current era exists
 			UnbondingRequests::<T>::insert(&who, (staking_amount, amount, current_era.unwrap()));
 			// unbond funds from pot account
-			pallet_staking::Pallet::<T>::unbond(origin, amount)?;
+			let pot_account = &Self::account_id();
+			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
+			pallet_staking::Pallet::<T>::unbond(pot_origin, staking_amount)?;
 
 			// Emit an event.
 			Self::deposit_event(Event::RequestUnbond(amount, who));
@@ -337,10 +339,10 @@ pub mod pallet {
 				&Self::account_id(),
 			);
 			let total_liquid = Self::total_liquid_issuance();
-			if total_staking.is_zero() {
+			if total_liquid.is_zero() || total_staking.is_zero() {
 				T::DefaultMintRate::get()
 			} else {
-				MintRate::checked_from_rational(total_staking, total_liquid)
+				MintRate::checked_from_rational(total_liquid, total_staking)
 					.unwrap_or_else(T::DefaultMintRate::get)
 			}
 		}

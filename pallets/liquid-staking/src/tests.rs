@@ -52,11 +52,40 @@ fn liquid_to_staking_works() {
 }
 
 #[test]
-fn nominate_works() {
+fn voting_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
 		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(102), 200));
 		assert_ok!(LiquidStaking::vote(Origin::signed(102), vec![21], 10));
+	});
+}
+
+#[test]
+fn request_unbond_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
+
+		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
+		assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 2000);
+		assert_eq!(LiquidStaking::liquid_to_staking(100).unwrap(), 10);
+
+		assert_ok!(LiquidStaking::request_unbond(Origin::signed(101), 100));
+		let unbond_req = LiquidStaking::unbonding_requests(&101);
+		assert_eq!(unbond_req.is_some(), true);
+		assert_eq!(unbond_req.unwrap(), (10, 100, 1));
+	});
+}
+
+#[test]
+fn mint_rate_is_consistent() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_eq!(LiquidStaking::current_mint_rate(), MintRate::saturating_from_rational(10, 1));
+		
+		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
+		assert_eq!(LiquidStaking::current_mint_rate(), MintRate::saturating_from_rational(10, 1));
+		
+		assert_ok!(LiquidStaking::request_unbond(Origin::signed(101), 100));
+		assert_eq!(LiquidStaking::current_mint_rate(), MintRate::saturating_from_rational(10, 1));
 	});
 }
