@@ -4,31 +4,28 @@
 
 use frame_support::{sp_runtime::traits::StaticLookup, transactional, BoundedVec, PalletId};
 pub use pallet::*;
-use sp_std::collections::btree_set::BTreeSet;
 
 #[cfg(test)]
 mod mock;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+
 #[cfg(test)]
 mod tests;
 
-use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::storage::IterableStorageMap;
 use orml_traits::{currency::MultiReservableCurrency, MultiCurrency};
 pub use pallet::*;
-use scale_info::TypeInfo;
+
 #[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{AccountIdConversion, Saturating, Zero},
-	ArithmeticError, FixedPointNumber, FixedPointOperand, FixedU128, RuntimeDebug,
+	ArithmeticError, FixedPointNumber, FixedPointOperand,
 };
-use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::EraIndex;
 
-pub use primitives::MintRate;
-type CurrencyId = u32;
+pub use primitives::{CurrencyId, MintRate};
 pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
 
 // Waiting period before tokens are unlocked
@@ -222,7 +219,7 @@ pub mod pallet {
 
 			// probably a create if not exist like api is there?
 			let exists = LiquidVoteCount::<T>::try_get(target.clone()).is_ok();
-			
+
 			if exists {
 				LiquidVoteCount::<T>::mutate(target.clone(), |votes| {
 					votes.saturating_add(liquid_amount);
@@ -344,11 +341,6 @@ pub mod pallet {
 			);
 
 			let pot_account = Self::account_id();
-			let pot_free_balance = <T as pallet::Config>::Currency::free_balance(
-				T::StakingCurrencyId::get(),
-				&pot_account,
-			);
-
 			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
 			let _ = pallet_staking::Pallet::<T>::withdraw_unbonded(pot_origin, 0);
 

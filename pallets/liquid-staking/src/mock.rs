@@ -6,7 +6,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill, FixedPointNumber,
+	FixedPointNumber, Perbill,
 };
 
 use frame_system::{EnsureRoot, EnsureSigned};
@@ -15,18 +15,17 @@ use primitives::MintRate;
 use sp_staking::{EraIndex, SessionIndex};
 
 use crate::mock::sp_api_hidden_includes_construct_runtime::hidden_include::traits::GenesisBuild;
+use frame_benchmarking::Zero;
 use frame_support::{
 	parameter_types,
 	traits::{
-		ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing, OneSessionHandler, Hooks, 
-		OnFinalize, Get,
+		ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Get, Hooks, Nothing,
+		OneSessionHandler,
 	},
 	PalletId,
 };
 use orml_currencies::BasicCurrencyAdapter;
 use orml_traits::parameter_type_with_key;
-use frame_benchmarking::Zero;
-use pallet_timestamp::WeightInfo;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -34,8 +33,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type Balance = u128;
 pub type Amount = i128;
 pub type BlockNumber = u64;
-pub const RID_1: ReserveIdentifier = [1u8; 8];
-pub const RID_2: ReserveIdentifier = [2u8; 8];
 pub type ReserveIdentifier = [u8; 8];
 
 type CurrencyId = u32;
@@ -44,7 +41,6 @@ pub const LIQUID_CURRENCY_ID: CurrencyId = 2;
 
 pub const BLOCK_TIME: u64 = 1000;
 pub const INIT_TIMESTAMP: u64 = 30_000;
-
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -408,7 +404,6 @@ pub(crate) fn current_era() -> EraIndex {
 	Staking::current_era().unwrap()
 }
 
-
 pub use pallet_staking::StakerStatus;
 pub struct ExtBuilder {
 	balances: Vec<(AccountId, CurrencyId, Balance)>,
@@ -419,7 +414,6 @@ impl Default for ExtBuilder {
 		Self { balances: vec![] }.topup_balances()
 	}
 }
-
 
 impl ExtBuilder {
 	pub fn balances(mut self, balances: Vec<(AccountId, CurrencyId, Balance)>) -> Self {
