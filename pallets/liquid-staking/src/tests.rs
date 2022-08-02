@@ -57,7 +57,7 @@ fn voting_works() {
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
 		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(102), 200));
-		assert_ok!(LiquidStaking::vote(Origin::signed(102), vec![21], 10));
+		assert_ok!(LiquidStaking::vote(Origin::signed(102), 21, 10));
 	});
 }
 
@@ -104,14 +104,19 @@ fn request_unbond_before_unbond_duration_not_works() {
 #[test]
 fn request_unbond_after_unbond_duration_works() {
 	ExtBuilder::default().build().execute_with(|| {
+		assert_eq!(LiquidStaking::total_liquid_issuance(), 0);
+
 		start_active_era(2);
 		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
 		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &101), 800);
 		assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 2000);
-		
-		start_active_era(3);
+		// liquid tokens are minted		
+		assert_eq!(LiquidStaking::total_liquid_issuance(), 2000);
 
-		assert_ok!(LiquidStaking::request_unbond(Origin::signed(101), 100));
+		start_active_era(3);
+		// liquid currency used to get back staking currency
+		let burn_amount = 100;
+		assert_ok!(LiquidStaking::request_unbond(Origin::signed(101), burn_amount));
 		
 		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &101), 800);
 		assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 1900);
@@ -130,6 +135,9 @@ fn request_unbond_after_unbond_duration_works() {
 		assert_ok!(LiquidStaking::withdraw_unbonded(Origin::signed(101)));
 		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &101), 810);
 		assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 1900);
+		/// liquid token is burnt
+		assert_eq!(LiquidStaking::total_liquid_issuance(), 2000 - burn_amount);
+
 	});
 }
 

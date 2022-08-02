@@ -190,7 +190,7 @@ pub mod pallet {
 		#[transactional]
 		pub fn vote(
 			origin: OriginFor<T>,
-			targets: Vec<<T::Lookup as StaticLookup>::Source>,
+			target: <T::Lookup as StaticLookup>::Source,
 			amount: BalanceOf<T>,
 		) -> DispatchResult {
 			let voter = ensure_signed(origin.clone())?;
@@ -206,7 +206,7 @@ pub mod pallet {
 
 			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
 
-			pallet_staking::Pallet::<T>::nominate(pot_origin, targets)?;
+			pallet_staking::Pallet::<T>::nominate(pot_origin, vec![target])?;
 
 			// Emit an event.
 			// Self::deposit_event(Event::BondAndMint(amount, staker));
