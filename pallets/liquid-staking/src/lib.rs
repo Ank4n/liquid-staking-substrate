@@ -97,6 +97,18 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Validator simple vote count in liquid currency amount
+	/// k-plurality to select winner
+	#[pallet::storage]
+	#[pallet::getter(fn liquid_vote_count)]
+	pub type LiquidVoteCount<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		BalanceOf<T>,
+		ValueQuery,
+	>;
+
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
 	#[pallet::event]
@@ -138,12 +150,12 @@ pub mod pallet {
 		#[transactional]
 		pub fn bond_and_mint(
 			origin: OriginFor<T>,
-			#[pallet::compact] amount: BalanceOf<T>,
+			#[pallet::compact] staking_amount: BalanceOf<T>,
 		) -> DispatchResult {
 			let staker = ensure_signed(origin.clone())?;
 
 			// Ensure the amount is above the Bond Threshold
-			ensure!(amount >= T::BondThreshold::get(), Error::<T>::BelowBondThreshold);
+			ensure!(staking_amount >= T::BondThreshold::get(), Error::<T>::BelowBondThreshold);
 			let pot_account = &Self::account_id();
 
 			// transfer staking currency from staker to the pot
@@ -151,10 +163,10 @@ pub mod pallet {
 				T::StakingCurrencyId::get(),
 				&staker,
 				&pot_account,
-				amount,
+				staking_amount,
 			)?;
 
-			let liquid_amount = Self::staking_to_liquid(amount)?;
+			let liquid_amount = Self::staking_to_liquid(staking_amount)?;
 
 			<T as pallet::Config>::Currency::deposit(
 				T::LiquidCurrencyId::get(),
@@ -170,18 +182,18 @@ pub mod pallet {
 			// so never have to bond again and not check ledger
 			let ledger = pallet_staking::Pallet::<T>::ledger(&pot_account);
 			if ledger.is_some() {
-				pallet_staking::Pallet::<T>::bond_extra(pot_origin, amount)?;
+				pallet_staking::Pallet::<T>::bond_extra(pot_origin, staking_amount)?;
 			} else {
 				pallet_staking::Pallet::<T>::bond(
 					pot_origin,
 					T::Lookup::unlookup(pot_account.clone()),
-					amount,
+					staking_amount,
 					pallet_staking::RewardDestination::Controller,
 				)?;
 			}
 
 			// Emit an event.
-			Self::deposit_event(Event::BondAndMint(amount, staker));
+			Self::deposit_event(Event::BondAndMint(staking_amount, staker));
 			// Return a successful result
 			Ok(())
 		}
@@ -191,7 +203,7 @@ pub mod pallet {
 		pub fn vote(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source,
-			amount: BalanceOf<T>,
+			liquid_amount: BalanceOf<T>,
 		) -> DispatchResult {
 			let voter = ensure_signed(origin.clone())?;
 			let pot_account = &Self::account_id();
@@ -201,7 +213,7 @@ pub mod pallet {
 				T::LiquidCurrencyId::get(),
 				&voter,
 				&pot_account,
-				amount,
+				liquid_amount,
 			)?;
 
 			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
@@ -209,7 +221,7 @@ pub mod pallet {
 			pallet_staking::Pallet::<T>::nominate(pot_origin, vec![target])?;
 
 			// Emit an event.
-			// Self::deposit_event(Event::BondAndMint(amount, staker));
+			// Self::deposit_event(Event::BondAndMint(liquid_amount, staker));
 			// Return a successful result
 			Ok(())
 		}
@@ -218,7 +230,7 @@ pub mod pallet {
 		#[transactional]
 		pub fn request_unbond(
 			origin: OriginFor<T>,
-			#[pallet::compact] amount: BalanceOf<T>,
+			#[pallet::compact] liquid_amount: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin.clone())?;
 
@@ -231,20 +243,20 @@ pub mod pallet {
 				T::LiquidCurrencyId::get(),
 				&who,
 				&Self::account_id(),
-				amount,
+				liquid_amount,
 			);
 
 			// no rewards/slash are counted once unbonding is requested
-			let staking_amount = Self::liquid_to_staking(amount)?;
+			let staking_amount = Self::liquid_to_staking(liquid_amount)?;
 			// can unwrap as we checked previously current era exists
-			UnbondingRequests::<T>::insert(&who, (staking_amount, amount, current_era.unwrap()));
+			UnbondingRequests::<T>::insert(&who, (staking_amount, liquid_amount, current_era.unwrap()));
 			// unbond funds from pot account
 			let pot_account = &Self::account_id();
 			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
 			pallet_staking::Pallet::<T>::unbond(pot_origin, staking_amount)?;
 
 			// Emit an event.
-			Self::deposit_event(Event::RequestUnbond(amount, who));
+			Self::deposit_event(Event::RequestUnbond(liquid_amount, who));
 			// Return a successful result
 			Ok(())
 		}
