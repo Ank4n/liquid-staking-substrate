@@ -182,7 +182,7 @@ pub use vote::{AccountVote, Vote, Voting};
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use weights::WeightInfo;
 
-pub use orml_traits::currency::{MultiLockableCurrency, MultiReservableCurrency};
+pub use orml_traits::currency::{MultiLockableCurrency, MultiReservableCurrency, MultiCurrency};
 
 #[cfg(test)]
 mod tests;
@@ -266,7 +266,11 @@ pub mod pallet {
 		/// Multi-Currency type for this pallet.
 		/// Keeping the old currency type so not to break all the existing apis
 		type MultiCurrency: MultiLockableCurrency<Self::AccountId, CurrencyId = CurrencyId>
-			+ MultiReservableCurrency<Self::AccountId, CurrencyId = CurrencyId>;
+			+ MultiReservableCurrency<Self::AccountId, CurrencyId = CurrencyId> 
+			+ MultiCurrency<
+				Self::AccountId,
+				CurrencyId = CurrencyId,
+				Balance = BalanceOf<Self>>;
 
 		/// The period between a proposal being approved and enacted.
 		///
@@ -712,7 +716,21 @@ pub mod pallet {
 			vote: AccountVote<BalanceOf<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::try_vote(&who, ref_index, vote)
+			Self::try_vote(&who, ref_index, vote, STAKING_CURRENCY_ID)
+		}
+
+		#[pallet::weight(
+			T::WeightInfo::vote_new(T::MaxVotes::get())
+				.max(T::WeightInfo::vote_existing(T::MaxVotes::get()))
+		)]
+		pub fn vote_v2(
+			origin: OriginFor<T>,
+			#[pallet::compact] ref_index: ReferendumIndex,
+			vote: AccountVote<BalanceOf<T>>,
+			currency: CurrencyId,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::try_vote(&who, ref_index, vote, currency)
 		}
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
@@ -1377,9 +1395,10 @@ impl<T: Config> Pallet<T> {
 		who: &T::AccountId,
 		ref_index: ReferendumIndex,
 		vote: AccountVote<BalanceOf<T>>,
+		currency: CurrencyId,
 	) -> DispatchResult {
 		let mut status = Self::referendum_status(ref_index)?;
-		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
+		ensure!(vote.balance() <= T::MultiCurrency::free_balance(currency, who), Error::<T>::InsufficientFunds);
 		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
 			if let Voting::Direct { ref mut votes, delegations, .. } = voting {
 				match votes.binary_search_by_key(&ref_index, |i| i.0) {
@@ -1412,7 +1431,7 @@ impl<T: Config> Pallet<T> {
 		})?;
 		// Extend the lock to `balance` (rather than setting it) since we don't know what other
 		// votes are in place.
-		T::Currency::extend_lock(DEMOCRACY_ID, who, vote.balance(), WithdrawReasons::TRANSFER);
+		let _ = T::MultiCurrency::extend_lock(DEMOCRACY_ID, currency, who, vote.balance());
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 		Ok(())
 	}
