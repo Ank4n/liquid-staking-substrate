@@ -346,7 +346,7 @@ pub struct ExtBuilder {
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { balances: vec![] }
+		Self { balances: vec![] }.topup_balances()
 	}
 }
 

@@ -10,7 +10,7 @@ use sp_runtime::FixedU128;
 
 #[test]
 fn total_issuance() {
-	ExtBuilder::default().topup_balances().build().execute_with(|| {
+	ExtBuilder::default().build().execute_with(|| {
 		assert_eq!(Currencies::total_issuance(STAKING_CURRENCY_ID), 16400);
 		assert_eq!(Currencies::total_issuance(LIQUID_CURRENCY_ID), 2000);
 	});
@@ -18,7 +18,7 @@ fn total_issuance() {
 
 #[test]
 fn bonding_works() {
-	ExtBuilder::default().topup_balances().build().execute_with(|| {
+	ExtBuilder::default().build().execute_with(|| {
 		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &101), 1000);
 		assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 0);
 
@@ -37,8 +37,15 @@ fn bonding_works() {
 }
 
 #[test]
-fn staking_works() {
-	ExtBuilder::default().topup_balances().build().execute_with(|| {
-			
+fn staking_to_liquid_works() {
+	ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(LiquidStaking::staking_to_liquid(10).unwrap(), 100);
+	});
+}
+
+#[test]
+fn liquid_to_staking_works() {
+	ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(LiquidStaking::liquid_to_staking(1000).unwrap(), 100);
 	});
 }
