@@ -182,7 +182,7 @@ pub use vote::{AccountVote, Vote, Voting};
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use weights::WeightInfo;
 
-pub use orml_traits::currency::{MultiLockableCurrency, MultiReservableCurrency};
+pub use orml_traits::currency::{MultiLockableCurrency, MultiReservableCurrency, MultiCurrency};
 
 #[cfg(test)]
 mod tests;
@@ -266,7 +266,11 @@ pub mod pallet {
 		/// Multi-Currency type for this pallet.
 		/// Keeping the old currency type so not to break all the existing apis
 		type MultiCurrency: MultiLockableCurrency<Self::AccountId, CurrencyId = CurrencyId>
-			+ MultiReservableCurrency<Self::AccountId, CurrencyId = CurrencyId>;
+			+ MultiReservableCurrency<Self::AccountId, CurrencyId = CurrencyId> 
+			+ MultiCurrency<
+				Self::AccountId,
+				CurrencyId = CurrencyId,
+				Balance = BalanceOf<Self>>;
 
 		/// The period between a proposal being approved and enacted.
 		///
