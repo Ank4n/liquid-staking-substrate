@@ -203,7 +203,7 @@ pub mod pallet {
 		pub fn vote(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source,
-			liquid_amount: BalanceOf<T>,
+			#[pallet::compact] liquid_amount: BalanceOf<T>,
 		) -> DispatchResult {
 			let voter = ensure_signed(origin.clone())?;
 			let pot_account = &Self::account_id();
