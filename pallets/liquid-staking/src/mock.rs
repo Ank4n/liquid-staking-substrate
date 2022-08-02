@@ -18,12 +18,15 @@ use crate::mock::sp_api_hidden_includes_construct_runtime::hidden_include::trait
 use frame_support::{
 	parameter_types,
 	traits::{
-		ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing, OneSessionHandler,
+		ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing, OneSessionHandler, Hooks, 
+		OnFinalize,
 	},
 	PalletId,
 };
 use orml_currencies::BasicCurrencyAdapter;
 use orml_traits::parameter_type_with_key;
+use frame_benchmarking::Zero;
+use pallet_timestamp::WeightInfo;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -38,6 +41,10 @@ pub type ReserveIdentifier = [u8; 8];
 type CurrencyId = u32;
 pub const STAKING_CURRENCY_ID: CurrencyId = 1;
 pub const LIQUID_CURRENCY_ID: CurrencyId = 2;
+
+pub const BLOCK_TIME: u64 = 1000;
+pub const INIT_TIMESTAMP: u64 = 30_000;
+
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -339,6 +346,49 @@ where
 	type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 }
 
+pub(crate) fn validator_controllers() -> Vec<AccountId> {
+	Session::validators()
+		.into_iter()
+		.map(|s| Staking::bonded(&s).expect("no controller for validator"))
+		.collect()
+}
+
+/// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
+pub(crate) fn start_session(session_index: SessionIndex) {
+	let end: u64 = if Offset::get().is_zero() {
+		(session_index as u64) * Period::get()
+	} else {
+		Offset::get() + (session_index.saturating_sub(1) as u64) * Period::get()
+	};
+	run_to_block(end);
+	// session must have progressed properly.
+	assert_eq!(
+		Session::current_index(),
+		session_index,
+		"current session index = {}, expected = {}",
+		Session::current_index(),
+		session_index,
+	);
+}
+
+/// Progress to the given block, triggering session and era changes as we progress.
+///
+/// This will finalize the previous block, initialize up to the given block, essentially simulating
+/// a block import/propose process where we first initialize the block, then execute some stuff (not
+/// in the function), and then finalize the block.
+pub(crate) fn run_to_block(n: BlockNumber) {
+	<Staking as Hooks<u64>>::on_finalize(System::block_number());
+	for b in (System::block_number() + 1)..=n {
+		System::set_block_number(b);
+		Session::on_initialize(b);
+		<Staking as Hooks<u64>>::on_initialize(b);
+		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
+		if b != n {
+			<Staking as Hooks<u64>>::on_finalize(System::block_number());
+		}
+	}
+}
+
 pub use pallet_staking::StakerStatus;
 pub struct ExtBuilder {
 	balances: Vec<(AccountId, CurrencyId, Balance)>,
@@ -349,6 +399,7 @@ impl Default for ExtBuilder {
 		Self { balances: vec![] }.topup_balances()
 	}
 }
+
 
 impl ExtBuilder {
 	pub fn balances(mut self, balances: Vec<(AccountId, CurrencyId, Balance)>) -> Self {

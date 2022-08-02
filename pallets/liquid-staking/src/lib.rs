@@ -8,10 +8,10 @@ pub use pallet::*;
 #[cfg(test)]
 mod mock;
 
-#[cfg(test)]
-mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+#[cfg(test)]
+mod tests;
 
 use sp_staking::{EraIndex, SessionIndex};
 
@@ -165,15 +165,51 @@ pub mod pallet {
 			TotalLiquidIssuance::<T>::mutate(|total| *total = total.saturating_add(liquid_amount));
 
 			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
-			pallet_staking::Pallet::<T>::bond(
-				pot_origin,
-				T::Lookup::unlookup(pot_account.clone()),
-				amount,
-				pallet_staking::RewardDestination::Controller,
-			)?;
+
+			// FIXME Bond some in genesis config 
+			// so never have to bond again and not check ledger
+			let ledger = pallet_staking::Pallet::<T>::ledger(&pot_account);
+			if ledger.is_some() {
+				pallet_staking::Pallet::<T>::bond_extra(pot_origin, amount)?;
+			} else {
+				pallet_staking::Pallet::<T>::bond(
+					pot_origin,
+					T::Lookup::unlookup(pot_account.clone()),
+					amount,
+					pallet_staking::RewardDestination::Controller,
+				)?;
+			}
 
 			// Emit an event.
 			Self::deposit_event(Event::BondAndMint(amount, staker));
+			// Return a successful result
+			Ok(())
+		}
+
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[transactional]
+		pub fn vote(
+			origin: OriginFor<T>,
+			targets: Vec<<T::Lookup as StaticLookup>::Source>,
+			amount: BalanceOf<T>,
+		) -> DispatchResult {
+			let voter = ensure_signed(origin.clone())?;
+			let pot_account = &Self::account_id();
+
+			// FIXME just reserve it, not transfer
+			<T as pallet::Config>::Currency::transfer(
+				T::LiquidCurrencyId::get(),
+				&voter,
+				&pot_account,
+				amount,
+			)?;
+
+			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
+
+			pallet_staking::Pallet::<T>::nominate(pot_origin, targets)?;
+
+			// Emit an event.
+			// Self::deposit_event(Event::BondAndMint(amount, staker));
 			// Return a successful result
 			Ok(())
 		}

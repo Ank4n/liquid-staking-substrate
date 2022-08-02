@@ -4,9 +4,10 @@ use super::*;
 use frame_support::{assert_noop, assert_ok};
 use mock::{Event, *};
 use orml_traits::MultiReservableCurrency;
-use sp_runtime::traits::BadOrigin;
 use pallet_staking::RewardDestination;
+use sp_runtime::traits::BadOrigin;
 use sp_runtime::FixedU128;
+use substrate_test_utils::assert_eq_uvec;
 
 #[test]
 fn total_issuance() {
@@ -39,13 +40,23 @@ fn bonding_works() {
 #[test]
 fn staking_to_liquid_works() {
 	ExtBuilder::default().build().execute_with(|| {
-			assert_eq!(LiquidStaking::staking_to_liquid(10).unwrap(), 100);
+		assert_eq!(LiquidStaking::staking_to_liquid(10).unwrap(), 100);
 	});
 }
 
 #[test]
 fn liquid_to_staking_works() {
 	ExtBuilder::default().build().execute_with(|| {
-			assert_eq!(LiquidStaking::liquid_to_staking(1000).unwrap(), 100);
+		assert_eq!(LiquidStaking::liquid_to_staking(1000).unwrap(), 100);
+	});
+}
+
+#[test]
+fn nominate_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
+		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
+		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(102), 200));
+		assert_ok!(LiquidStaking::vote(Origin::signed(102), vec![21], 10));
 	});
 }

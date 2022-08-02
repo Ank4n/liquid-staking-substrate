@@ -4221,6 +4221,7 @@ dependencies = [
  "sp-session",
  "sp-staking",
  "sp-std",
+ "substrate-test-utils",
 ]
 
 [[package]]
