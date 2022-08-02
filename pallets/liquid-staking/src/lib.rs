@@ -2,8 +2,9 @@
 #![allow(clippy::unused_unit)]
 #![allow(clippy::too_many_arguments)]
 
-use frame_support::{sp_runtime::traits::StaticLookup, transactional, PalletId};
+use frame_support::{sp_runtime::traits::StaticLookup, transactional, BoundedVec, PalletId};
 pub use pallet::*;
+use sp_std::collections::btree_set::BTreeSet;
 
 #[cfg(test)]
 mod mock;
@@ -13,10 +14,9 @@ mod benchmarking;
 #[cfg(test)]
 mod tests;
 
-use sp_staking::{EraIndex, SessionIndex};
-
 use codec::{Decode, Encode, MaxEncodedLen};
-use orml_traits::MultiCurrency;
+use frame_support::storage::IterableStorageMap;
+use orml_traits::{currency::MultiReservableCurrency, MultiCurrency};
 pub use pallet::*;
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -25,10 +25,10 @@ use sp_runtime::{
 	traits::{AccountIdConversion, Saturating, Zero},
 	ArithmeticError, FixedPointNumber, FixedPointOperand, FixedU128, RuntimeDebug,
 };
+use sp_staking::{EraIndex, SessionIndex};
 
 pub use primitives::MintRate;
 type CurrencyId = u32;
-
 pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
 
 // Waiting period before tokens are unlocked
@@ -38,7 +38,7 @@ pub type UnbondWait<T> = <T as pallet_staking::Config>::BondingDuration;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+	use frame_system::{ensure_root, pallet_prelude::*};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -51,10 +51,10 @@ pub mod pallet {
 
 		/// Multi-currency support
 		type Currency: MultiCurrency<
-			Self::AccountId,
-			CurrencyId = CurrencyId,
-			Balance = <Self as pallet_staking::Config>::CurrencyBalance,
-		>;
+				Self::AccountId,
+				CurrencyId = CurrencyId,
+				Balance = <Self as pallet_staking::Config>::CurrencyBalance,
+			> + MultiReservableCurrency<Self::AccountId, CurrencyId = CurrencyId>;
 
 		/// Staking Currency ID
 		#[pallet::constant]
@@ -75,6 +75,10 @@ pub mod pallet {
 		/// Minimum liquid amount for unstaking staked currency.
 		#[pallet::constant]
 		type UnbondThreshold: Get<BalanceOf<Self>>;
+
+		/// Max validator count
+		#[pallet::constant]
+		type MaxValidatorCount: Get<u32>;
 	}
 
 	#[pallet::pallet]
@@ -101,13 +105,14 @@ pub mod pallet {
 	/// k-plurality to select winner
 	#[pallet::storage]
 	#[pallet::getter(fn liquid_vote_count)]
-	pub type LiquidVoteCount<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		T::AccountId,
-		BalanceOf<T>,
-		ValueQuery,
-	>;
+	pub type LiquidVoteCount<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>, ValueQuery>;
+
+	/// Voter list by their votes
+	#[pallet::storage]
+	#[pallet::getter(fn voters)]
+	pub type Voters<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>, ValueQuery>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
@@ -117,6 +122,8 @@ pub mod pallet {
 		BondAndMint(BalanceOf<T>, T::AccountId),
 		RequestUnbond(BalanceOf<T>, T::AccountId),
 		Withdraw(T::AccountId),
+		Voted(T::AccountId, T::AccountId, BalanceOf<T>),
+		NominationsApplied(T::AccountId, T::AccountId),
 	}
 
 	// Errors inform users that something went wrong.
@@ -202,26 +209,70 @@ pub mod pallet {
 		#[transactional]
 		pub fn vote(
 			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: T::AccountId,
 			#[pallet::compact] liquid_amount: BalanceOf<T>,
 		) -> DispatchResult {
 			let voter = ensure_signed(origin.clone())?;
-			let pot_account = &Self::account_id();
 
-			// FIXME just reserve it, not transfer
-			<T as pallet::Config>::Currency::transfer(
+			<<T as pallet::Config>::Currency as MultiReservableCurrency<_>>::reserve(
 				T::LiquidCurrencyId::get(),
 				&voter,
-				&pot_account,
 				liquid_amount,
 			)?;
 
-			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
+			LiquidVoteCount::<T>::mutate(target.clone(), |votes| {
+				votes.saturating_add(liquid_amount)
+			});
 
-			pallet_staking::Pallet::<T>::nominate(pot_origin, vec![target])?;
+			Voters::<T>::insert(voter.clone(), liquid_amount);
 
 			// Emit an event.
-			// Self::deposit_event(Event::BondAndMint(liquid_amount, staker));
+			Self::deposit_event(Event::Voted(voter, target, liquid_amount));
+			// Return a successful result
+			Ok(())
+		}
+
+		/// should be called at end of era
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[transactional]
+		pub fn apply_votes(origin: OriginFor<T>) -> DispatchResult {
+			ensure_root(origin)?;
+			// Probably super bad to sort and do unwraps
+			// fix it before going to production
+			let votes =
+				<LiquidVoteCount<T> as IterableStorageMap<T::AccountId, BalanceOf<T>>>::iter()
+					.map(|(tar, votes)| {
+						// clear votes for the next era
+						LiquidVoteCount::<T>::remove(&tar);
+						(tar, votes)
+					})
+					.collect::<Vec<_>>();
+
+			let mut votes: BoundedVec<_, T::MaxValidatorCount> =
+				BoundedVec::try_from(votes).expect("value not expected to be higher");
+			// sort in descending order of votes
+			votes.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+			let pot_account = &Self::account_id();
+			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
+			// super naive selection of only top two validators
+			let val1 = T::Lookup::unlookup(votes[0].0.clone());
+			let val2 = T::Lookup::unlookup(votes[1].0.clone());
+			pallet_staking::Pallet::<T>::nominate(pot_origin, vec![val1.clone(), val2.clone()])?;
+			// unreserve voter's money
+			<Voters<T> as IterableStorageMap<T::AccountId, BalanceOf<T>>>::iter().for_each(
+				|(voter, liquid_amount)| {
+					// Clear votes for the next era
+					Voters::<T>::remove(&voter);
+					<<T as pallet::Config>::Currency as MultiReservableCurrency<_>>::unreserve(
+						T::LiquidCurrencyId::get(),
+						&voter,
+						liquid_amount,
+					);
+				},
+			);
+			// Emit an event.
+			Self::deposit_event(Event::NominationsApplied(votes[0].0.clone(), votes[1].0.clone()));
 			// Return a successful result
 			Ok(())
 		}
@@ -249,7 +300,10 @@ pub mod pallet {
 			// no rewards/slash are counted once unbonding is requested
 			let staking_amount = Self::liquid_to_staking(liquid_amount)?;
 			// can unwrap as we checked previously current era exists
-			UnbondingRequests::<T>::insert(&who, (staking_amount, liquid_amount, current_era.unwrap()));
+			UnbondingRequests::<T>::insert(
+				&who,
+				(staking_amount, liquid_amount, current_era.unwrap()),
+			);
 			// unbond funds from pot account
 			let pot_account = &Self::account_id();
 			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();

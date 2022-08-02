@@ -267,6 +267,7 @@ parameter_types! {
 	pub const UnBondWait: EraIndex = 28;
 	pub static BondThreshold: Balance = 0;
 	pub static UnbondThreshold: Balance = 0;
+	pub static MaxValidatorCount: u32 = 5;
 }
 
 impl pallet_liquid_staking::Config for Test {
@@ -278,6 +279,7 @@ impl pallet_liquid_staking::Config for Test {
 	type DefaultMintRate = DefaultMintRate;
 	type BondThreshold = BondThreshold;
 	type UnbondThreshold = UnbondThreshold;
+	type MaxValidatorCount = MaxValidatorCount;
 }
 
 parameter_types! {

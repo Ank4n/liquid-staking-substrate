@@ -135,7 +135,7 @@ fn request_unbond_after_unbond_duration_works() {
 		assert_ok!(LiquidStaking::withdraw_unbonded(Origin::signed(101)));
 		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &101), 810);
 		assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 1900);
-		/// liquid token is burnt
+		// liquid token is burnt
 		assert_eq!(LiquidStaking::total_liquid_issuance(), 2000 - burn_amount);
 
 	});
