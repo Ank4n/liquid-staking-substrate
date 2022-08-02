@@ -19,7 +19,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Nothing, OneSessionHandler, Hooks, 
-		OnFinalize,
+		OnFinalize, Get,
 	},
 	PalletId,
 };
@@ -241,13 +241,13 @@ impl pallet_staking::Config for Test {
 	type Event = Event;
 	type Slash = ();
 	type Reward = ();
-	type SessionsPerEra = ();
+	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = ();
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type BondingDuration = ();
+	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
-	type NextNewSession = ();
+	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
@@ -262,7 +262,7 @@ impl pallet_staking::Config for Test {
 parameter_types! {
 	pub const StakingCurrencyId: CurrencyId = STAKING_CURRENCY_ID;
 	pub const LiquidCurrencyId: CurrencyId = LIQUID_CURRENCY_ID;
-	pub const MyPalletId: PalletId = PalletId(*b"palletls");
+	pub const MyPalletId: PalletId = PalletId(*b"stayquid");
 	pub DefaultMintRate: MintRate = MintRate::saturating_from_rational(10, 1);
 	pub const UnBondWait: EraIndex = 28;
 	pub static BondThreshold: Balance = 0;
@@ -388,6 +388,24 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 		}
 	}
 }
+
+/// Progress until the given era.
+pub(crate) fn start_active_era(era_index: EraIndex) {
+	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
+	assert_eq!(active_era(), era_index);
+	// One way or another, current_era must have changed before the active era, so they must match
+	// at this point.
+	assert_eq!(current_era(), active_era());
+}
+
+pub(crate) fn active_era() -> EraIndex {
+	Staking::active_era().unwrap().index
+}
+
+pub(crate) fn current_era() -> EraIndex {
+	Staking::current_era().unwrap()
+}
+
 
 pub use pallet_staking::StakerStatus;
 pub struct ExtBuilder {

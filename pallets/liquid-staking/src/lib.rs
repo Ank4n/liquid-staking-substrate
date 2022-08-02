@@ -265,7 +265,7 @@ pub mod pallet {
 			let unbond_wait = UnbondWait::<T>::get();
 
 			ensure!(
-				old_era + unbond_wait < current_era.unwrap(),
+				old_era + unbond_wait <= current_era.unwrap(),
 				Error::<T>::UnbondingWaitNotComplete
 			);
 
@@ -275,9 +275,8 @@ pub mod pallet {
 				&pot_account,
 			);
 
-			if pot_free_balance < stake_amount {
-				let _ = pallet_staking::Pallet::<T>::withdraw_unbonded(origin, 0);
-			}
+			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
+			let _ = pallet_staking::Pallet::<T>::withdraw_unbonded(pot_origin, 0);
 
 			// burn liquid amount
 			<T as pallet::Config>::Currency::withdraw(
