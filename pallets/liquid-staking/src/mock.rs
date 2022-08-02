@@ -6,7 +6,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
+	Perbill, FixedPointNumber,
 };
 
 use frame_system::{EnsureRoot, EnsureSigned};
@@ -256,7 +256,7 @@ parameter_types! {
 	pub const StakingCurrencyId: CurrencyId = STAKING_CURRENCY_ID;
 	pub const LiquidCurrencyId: CurrencyId = LIQUID_CURRENCY_ID;
 	pub const MyPalletId: PalletId = PalletId(*b"palletls");
-	pub DefaultMintRate: MintRate = MintRate::from_inner(10);
+	pub DefaultMintRate: MintRate = MintRate::saturating_from_rational(10, 1);
 	pub const UnBondWait: EraIndex = 28;
 	pub static BondThreshold: Balance = 0;
 	pub static UnbondThreshold: Balance = 0;

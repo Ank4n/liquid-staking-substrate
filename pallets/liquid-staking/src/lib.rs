@@ -10,7 +10,6 @@ mod mock;
 
 #[cfg(test)]
 mod tests;
-
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
@@ -27,15 +26,13 @@ use sp_runtime::{
 	ArithmeticError, FixedPointNumber, FixedPointOperand, FixedU128, RuntimeDebug,
 };
 
-pub use primitives::{MintRate};
+pub use primitives::MintRate;
 type CurrencyId = u32;
 
 pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
 
 // Waiting period before tokens are unlocked
 pub type UnbondWait<T> = <T as pallet_staking::Config>::BondingDuration;
-
-
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -157,15 +154,8 @@ pub mod pallet {
 				amount,
 			)?;
 
-			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
-			pallet_staking::Pallet::<T>::bond(
-				pot_origin,
-				T::Lookup::unlookup(pot_account.clone()),
-				amount,
-				pallet_staking::RewardDestination::Controller,
-			)?;
-
 			let liquid_amount = Self::staking_to_liquid(amount)?;
+
 			<T as pallet::Config>::Currency::deposit(
 				T::LiquidCurrencyId::get(),
 				&staker,
@@ -173,6 +163,14 @@ pub mod pallet {
 			)?;
 
 			TotalLiquidIssuance::<T>::mutate(|total| *total = total.saturating_add(liquid_amount));
+
+			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
+			pallet_staking::Pallet::<T>::bond(
+				pot_origin,
+				T::Lookup::unlookup(pot_account.clone()),
+				amount,
+				pallet_staking::RewardDestination::Controller,
+			)?;
 
 			// Emit an event.
 			Self::deposit_event(Event::BondAndMint(amount, staker));
@@ -226,10 +224,13 @@ pub mod pallet {
 			let current_era = Self::current_era();
 			ensure!(current_era.is_some(), Error::<T>::CurrentEraNotSet);
 
-			let unbond_wait = UnbondWait::<T>::get(); 
-			
-			ensure!(old_era + unbond_wait < current_era.unwrap(), Error::<T>::UnbondingWaitNotComplete);
-			
+			let unbond_wait = UnbondWait::<T>::get();
+
+			ensure!(
+				old_era + unbond_wait < current_era.unwrap(),
+				Error::<T>::UnbondingWaitNotComplete
+			);
+
 			let pot_account = Self::account_id();
 			let pot_free_balance = <T as pallet::Config>::Currency::free_balance(
 				T::StakingCurrencyId::get(),
@@ -256,7 +257,7 @@ pub mod pallet {
 			)?;
 
 			TotalLiquidIssuance::<T>::mutate(|total| *total = total.saturating_sub(liquid_amount));
-			
+
 			// Emit an event.
 			Self::deposit_event(Event::Withdraw(who));
 			// Return a successful result
