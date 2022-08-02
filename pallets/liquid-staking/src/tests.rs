@@ -5,6 +5,7 @@ use frame_support::{assert_err, assert_ok};
 use mock::*;
 use orml_traits::MultiReservableCurrency;
 use substrate_test_utils::assert_eq_uvec;
+use primitives::{STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID};  
 
 #[test]
 fn total_issuance() {

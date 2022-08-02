@@ -35,9 +35,7 @@ pub type Amount = i128;
 pub type BlockNumber = u64;
 pub type ReserveIdentifier = [u8; 8];
 
-type CurrencyId = u32;
-pub const STAKING_CURRENCY_ID: CurrencyId = 1;
-pub const LIQUID_CURRENCY_ID: CurrencyId = 2;
+use primitives::{CurrencyId, STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID};  
 
 pub const BLOCK_TIME: u64 = 1000;
 pub const INIT_TIMESTAMP: u64 = 30_000;
@@ -295,6 +293,7 @@ impl pallet_democracy::Config for Test {
 	type Proposal = Call;
 	type Event = Event;
 	type Currency = Balances;
+	type MultiCurrency = Currencies;
 	type EnactmentPeriod = EnactmentPeriod;
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;

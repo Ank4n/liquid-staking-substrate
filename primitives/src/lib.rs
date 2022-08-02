@@ -6,5 +6,8 @@ use sp_runtime::{FixedU128};
 pub type MintRate = FixedU128;
 
 pub type CurrencyId = u32;
-pub const DOT: CurrencyId = 1;
-pub const LDOT: CurrencyId = 2;
+
+// Native
+pub const STAKING_CURRENCY_ID: CurrencyId = 1;
+
+pub const LIQUID_CURRENCY_ID: CurrencyId = 2;

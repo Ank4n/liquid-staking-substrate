@@ -182,6 +182,8 @@ pub use vote::{AccountVote, Vote, Voting};
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use weights::WeightInfo;
 
+pub use orml_traits::currency::{MultiLockableCurrency, MultiReservableCurrency};
+
 #[cfg(test)]
 mod tests;
 
@@ -189,6 +191,8 @@ mod tests;
 pub mod benchmarking;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
+
+pub use primitives::{CurrencyId, STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID};
 
 /// The maximum number of vetoers on a single proposal used to compute Weight.
 ///
@@ -258,6 +262,11 @@ pub mod pallet {
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
+
+		/// Multi-Currency type for this pallet.
+		/// Keeping the old currency type so not to break all the existing apis
+		type MultiCurrency: MultiLockableCurrency<Self::AccountId, CurrencyId = CurrencyId>
+			+ MultiReservableCurrency<Self::AccountId, CurrencyId = CurrencyId>;
 
 		/// The period between a proposal being approved and enacted.
 		///
@@ -869,7 +878,7 @@ pub mod pallet {
 			if let Some((e_proposal_hash, _)) = <NextExternal<T>>::get() {
 				ensure!(proposal_hash == e_proposal_hash, Error::<T>::ProposalMissing);
 			} else {
-				return Err(Error::<T>::NoProposal.into())
+				return Err(Error::<T>::NoProposal.into());
 			}
 
 			let mut existing_vetoers =
@@ -1088,8 +1097,9 @@ pub mod pallet {
 
 			let (provider, deposit, since, expiry) = <Preimages<T>>::get(&proposal_hash)
 				.and_then(|m| match m {
-					PreimageStatus::Available { provider, deposit, since, expiry, .. } =>
-						Some((provider, deposit, since, expiry)),
+					PreimageStatus::Available { provider, deposit, since, expiry, .. } => {
+						Some((provider, deposit, since, expiry))
+					},
 					_ => None,
 				})
 				.ok_or(Error::<T>::PreimageMissing)?;
@@ -1637,7 +1647,7 @@ impl<T: Config> Pallet<T> {
 			);
 			Ok(())
 		} else {
-			return Err(Error::<T>::NoneWaiting.into())
+			return Err(Error::<T>::NoneWaiting.into());
 		}
 	}
 
@@ -1670,7 +1680,7 @@ impl<T: Config> Pallet<T> {
 			}
 			Ok(())
 		} else {
-			return Err(Error::<T>::NoneWaiting.into())
+			return Err(Error::<T>::NoneWaiting.into());
 		}
 	}
 
@@ -1721,8 +1731,9 @@ impl<T: Config> Pallet<T> {
 				Preimages::<T>::mutate_exists(
 					&status.proposal_hash,
 					|maybe_pre| match *maybe_pre {
-						Some(PreimageStatus::Available { ref mut expiry, .. }) =>
-							*expiry = Some(when),
+						Some(PreimageStatus::Available { ref mut expiry, .. }) => {
+							*expiry = Some(when)
+						},
 						ref mut a => *a = Some(PreimageStatus::Missing(when)),
 					},
 				);
@@ -1797,8 +1808,8 @@ impl<T: Config> Pallet<T> {
 		//   of unbaked referendum is bounded by this number. In case those number have changed in a
 		//   runtime upgrade the formula should be adjusted but the bound should still be sensible.
 		<LowestUnbaked<T>>::mutate(|ref_index| {
-			while *ref_index < last &&
-				Self::referendum_info(*ref_index)
+			while *ref_index < last
+				&& Self::referendum_info(*ref_index)
 					.map_or(true, |info| matches!(info, ReferendumInfo::Finished { .. }))
 			{
 				*ref_index += 1
@@ -1862,7 +1873,7 @@ impl<T: Config> Pallet<T> {
 			Ok(0) => return Err(Error::<T>::PreimageMissing.into()),
 			_ => {
 				sp_runtime::print("Failed to decode `PreimageStatus` variant");
-				return Err(Error::<T>::PreimageMissing.into())
+				return Err(Error::<T>::PreimageMissing.into());
 			},
 		}
 
