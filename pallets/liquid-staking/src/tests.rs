@@ -26,10 +26,10 @@ fn bonding_works() {
 		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
 
 		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &101), 800);
-		let treasury = LiquidStaking::account_id();
+		let pot_account = LiquidStaking::account_id();
 		let total_liquid_issuance = LiquidStaking::total_liquid_issuance();
 
-		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &treasury), 200);
+		assert_eq!(Currencies::free_balance(STAKING_CURRENCY_ID, &pot_account), 200);
 
 		assert_eq!(total_liquid_issuance, 2000);
 
@@ -54,10 +54,55 @@ fn liquid_to_staking_works() {
 #[test]
 fn voting_works() {
 	ExtBuilder::default().build().execute_with(|| {
+		let pot_account = LiquidStaking::account_id();
+		assert_eq!(LiquidStaking::current_era().unwrap(), 0);
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
+		start_active_era(1);
+		
+		// stakers minting 
 		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(101), 200));
 		assert_ok!(LiquidStaking::bond_and_mint(Origin::signed(102), 200));
-		assert_ok!(LiquidStaking::vote(Origin::signed(102), 21, 10));
+		// stakers voting for their favourite nomination
+		// highest votes
+		assert_ok!(LiquidStaking::vote(Origin::signed(101), 30, 300));
+		assert_eq!(<Currencies as MultiReservableCurrency<_>>::reserved_balance(LIQUID_CURRENCY_ID, &101), 300);
+		// second highest
+		assert_ok!(LiquidStaking::vote(Origin::signed(102), 20, 200));
+		// bottom
+		assert_ok!(LiquidStaking::vote(Origin::signed(102), 10, 150));
+		
+		// verify vote counts 
+		assert_eq!(LiquidStaking::liquid_vote_count(30), 300);
+		assert_eq!(LiquidStaking::liquid_vote_count(20), 200);
+		assert_eq!(LiquidStaking::liquid_vote_count(10), 150);
+		let expected_set = vec![30, 20];
+		assert_ok!(LiquidStaking::apply_votes(Origin::root()));
+		assert_eq!(expected_set, Staking::nominators(&pot_account).unwrap().targets.into_inner());
+		
+		// vote apply should clear votes
+		// verify vote counts 
+		assert_eq!(LiquidStaking::liquid_vote_count(30), 0);
+		assert_eq!(LiquidStaking::liquid_vote_count(20), 0);
+		assert_eq!(LiquidStaking::liquid_vote_count(10), 0);
+		// vote apply should also have unreseved the balances
+		assert_eq!(<Currencies as MultiReservableCurrency<_>>::reserved_balance(LIQUID_CURRENCY_ID, &101), 0);
+		
+		// Lets try to vote again
+		start_active_era(5);
+		// highest votes
+		assert_ok!(LiquidStaking::vote(Origin::signed(101), 10, 200));
+		// second highest
+		assert_ok!(LiquidStaking::vote(Origin::signed(102), 20, 180));
+		// bottom
+		assert_ok!(LiquidStaking::vote(Origin::signed(101), 30, 150));
+		
+		assert_eq!(LiquidStaking::liquid_vote_count(10), 200);
+		assert_eq!(LiquidStaking::liquid_vote_count(20), 180);
+		assert_eq!(LiquidStaking::liquid_vote_count(30), 150);
+		
+		let expected_set = vec![10, 20];
+		assert_ok!(LiquidStaking::apply_votes(Origin::root()));
+		assert_eq!(expected_set, Staking::nominators(&pot_account).unwrap().targets.into_inner());
 	});
 }
 

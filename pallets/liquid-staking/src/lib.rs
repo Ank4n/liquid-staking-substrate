@@ -220,9 +220,16 @@ pub mod pallet {
 				liquid_amount,
 			)?;
 
-			LiquidVoteCount::<T>::mutate(target.clone(), |votes| {
-				votes.saturating_add(liquid_amount)
-			});
+			// probably a create if not exist like api is there?
+			let exists = LiquidVoteCount::<T>::try_get(target.clone()).is_ok();
+			
+			if exists {
+				LiquidVoteCount::<T>::mutate(target.clone(), |votes| {
+					votes.saturating_add(liquid_amount);
+				});
+			} else {
+				LiquidVoteCount::<T>::insert(target.clone(), liquid_amount);
+			}
 
 			Voters::<T>::insert(voter.clone(), liquid_amount);
 
@@ -256,6 +263,7 @@ pub mod pallet {
 			let pot_account = &Self::account_id();
 			let pot_origin = frame_system::RawOrigin::Signed(pot_account.clone()).into();
 			// super naive selection of only top two validators
+			// extremely unsafe to use indexes like this
 			let val1 = T::Lookup::unlookup(votes[0].0.clone());
 			let val2 = T::Lookup::unlookup(votes[1].0.clone());
 			pallet_staking::Pallet::<T>::nominate(pot_origin, vec![val1.clone(), val2.clone()])?;
