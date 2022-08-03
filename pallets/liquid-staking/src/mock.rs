@@ -8,11 +8,11 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, Hash},
 	FixedPointNumber, Perbill,
 };
-use codec::{Decode, Encode};
+use codec::{Encode};
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_democracy::{
 	conviction::Conviction,
-	vote::{AccountVote, Vote, Voting},
+	vote::{AccountVote, Vote},
 };
 use primitives::MintRate;
 use sp_staking::{EraIndex, SessionIndex};
@@ -20,7 +20,7 @@ use sp_staking::{EraIndex, SessionIndex};
 use crate::mock::sp_api_hidden_includes_construct_runtime::hidden_include::traits::GenesisBuild;
 use frame_benchmarking::Zero;
 use frame_support::{
-	parameter_types, assert_noop, assert_ok,
+	parameter_types, assert_ok,
 	traits::{
 		ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Get, Hooks, Nothing,
 		OneSessionHandler,

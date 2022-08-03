@@ -159,7 +159,7 @@ use frame_support::{
 		defensive_prelude::*,
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons,
+		ReservableCurrency, 
 	},
 	weights::Weight,
 };
@@ -1577,7 +1577,7 @@ impl<T: Config> Pallet<T> {
 			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
-			T::MultiCurrency::extend_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, &who, balance);
+			let _ = T::MultiCurrency::extend_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, &who, balance);
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated { who, target });
@@ -1620,9 +1620,9 @@ impl<T: Config> Pallet<T> {
 			voting.locked_balance()
 		});
 		if lock_needed.is_zero() {
-			T::MultiCurrency::remove_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, who);
+			let _ = T::MultiCurrency::remove_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, who);
 		} else {
-			T::MultiCurrency::set_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, who, lock_needed);
+			let _ = T::MultiCurrency::set_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, who, lock_needed);
 		}
 	}
 

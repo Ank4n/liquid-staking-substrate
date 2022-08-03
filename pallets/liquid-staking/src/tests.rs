@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::{assert_err, assert_noop, assert_ok};
+use frame_support::{assert_err, assert_ok};
 use mock::*;
 use orml_traits::MultiReservableCurrency;
 use primitives::{LIQUID_CURRENCY_ID, STAKING_CURRENCY_ID};
