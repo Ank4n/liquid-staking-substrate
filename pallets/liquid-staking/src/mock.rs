@@ -5,24 +5,27 @@ use sp_core::H256;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, Hash},
 	FixedPointNumber, Perbill,
 };
-
+use codec::{Decode, Encode};
 use frame_system::{EnsureRoot, EnsureSigned};
-
+use pallet_democracy::{
+	conviction::Conviction,
+	vote::{AccountVote, Vote, Voting},
+};
 use primitives::MintRate;
 use sp_staking::{EraIndex, SessionIndex};
 
 use crate::mock::sp_api_hidden_includes_construct_runtime::hidden_include::traits::GenesisBuild;
 use frame_benchmarking::Zero;
 use frame_support::{
-	parameter_types,
+	parameter_types, assert_noop, assert_ok,
 	traits::{
 		ConstU128, ConstU16, ConstU32, ConstU64, EqualPrivilegeOnly, Get, Hooks, Nothing,
 		OneSessionHandler,
 	},
-	PalletId,
+	PalletId, pallet_prelude::DispatchResult
 };
 use orml_currencies::BasicCurrencyAdapter;
 use orml_traits::parameter_type_with_key;
@@ -39,6 +42,7 @@ use primitives::{CurrencyId, STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID};
 
 pub const BLOCK_TIME: u64 = 1000;
 pub const INIT_TIMESTAMP: u64 = 30_000;
+const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -277,16 +281,16 @@ impl pallet_liquid_staking::Config for Test {
 }
 
 parameter_types! {
-	pub const LaunchPeriod: BlockNumber = 10;
-	pub const VotingPeriod: BlockNumber = 10;
-	pub const VoteLockingPeriod: BlockNumber = 10;
-	pub const FastTrackVotingPeriod: BlockNumber = 5;
-	pub const EnactmentPeriod: BlockNumber = 10;
-	pub const CooloffPeriod: BlockNumber = 10;
-	pub const MinimumDeposit: Balance = 10;
+	pub const LaunchPeriod: BlockNumber = 2;
+	pub const VotingPeriod: BlockNumber = 2;
+	pub const VoteLockingPeriod: BlockNumber = 2;
+	pub const FastTrackVotingPeriod: BlockNumber = 2;
+	pub const EnactmentPeriod: BlockNumber = 2;
+	pub const CooloffPeriod: BlockNumber = 2;
+	pub const MinimumDeposit: Balance = 1;
 	pub const MaxVotes: u32 = 10;
 	pub const MaxProposals: u32 = 10;
-	pub const PreimageByteDeposit: Balance = 10;
+	pub const PreimageByteDeposit: Balance = 0;
 	pub const InstantAllowed: bool = false;
 }
 impl pallet_democracy::Config for Test {
@@ -403,6 +407,51 @@ pub(crate) fn current_era() -> EraIndex {
 	Staking::current_era().unwrap()
 }
 
+pub type ReferendumIndex = u32;
+
+pub(crate) fn begin_referendum() -> ReferendumIndex {
+	System::set_block_number(0);
+	assert_ok!(propose_set_balance_and_note(1, 2, 1));
+	fast_forward_to(2);
+	0
+}
+
+fn fast_forward_to(n: u64) {
+	while System::block_number() < n {
+		next_block();
+	}
+}
+
+fn next_block() {
+	System::set_block_number(System::block_number() + 1);
+	Scheduler::on_initialize(System::block_number());
+	Democracy::begin_block(System::block_number());
+}
+
+fn propose_set_balance_and_note(who: AccountId, value: u128, delay: u64) -> DispatchResult {
+	Democracy::propose(Origin::signed(who), set_balance_proposal_hash_and_note(value), delay.into())
+}
+
+fn set_balance_proposal_hash_and_note(value: u128) -> H256 {
+	let p = set_balance_proposal(value);
+	let h = BlakeTwo256::hash(&p[..]);
+	match Democracy::note_preimage(Origin::signed(6), p) {
+		Ok(_) => (),
+		// Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
+		Err(x) => panic!("{:?}", x),
+	}
+	h
+}
+
+fn set_balance_proposal(value: u128) -> Vec<u8> {
+	Call::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
+		.encode()
+}
+use pallet_democracy::MultiCurrency;
+
+pub(crate) fn aye(who: AccountId, currency_id: CurrencyId) -> AccountVote<u128> {
+	AccountVote::Standard { vote: AYE, balance: Currencies::free_balance(currency_id, &who) }
+}
 pub use pallet_staking::StakerStatus;
 pub struct ExtBuilder {
 	balances: Vec<(AccountId, CurrencyId, Balance)>,
@@ -428,6 +477,8 @@ impl ExtBuilder {
 			(2, LIQUID_CURRENCY_ID, 1000),
 			(3, STAKING_CURRENCY_ID, 1000),
 			(4, STAKING_CURRENCY_ID, 1000),
+			(5, STAKING_CURRENCY_ID, 1000),
+			(6, STAKING_CURRENCY_ID, 1000),
 			// controllers
 			(10, STAKING_CURRENCY_ID, 100),
 			(20, STAKING_CURRENCY_ID, 100),
