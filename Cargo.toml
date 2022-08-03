@@ -5,6 +5,7 @@ members = [
     "pallets/staking",
     "pallets/democracy",
     "runtime",
+    "sq-primitives"
 ]
 [profile.release]
 panic = "unwind"

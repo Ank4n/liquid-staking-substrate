@@ -59,6 +59,7 @@ hex-literal = { version = "0.3.4", optional = true }
 
 # Local Dependencies
 pallet-liquid-staking = { version = "4.0.0-dev", default-features = false, path = "../pallets/liquid-staking" }
+sq-primitives = { default-features = false, version = '4.0.0-dev', path = "../sq-primitives" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }

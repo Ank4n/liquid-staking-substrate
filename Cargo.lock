@@ -3792,6 +3792,7 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
+ "sq-primitives",
  "substrate-wasm-builder",
 ]
 
