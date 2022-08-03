@@ -170,9 +170,9 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-mod conviction;
+pub mod conviction;
 mod types;
-mod vote;
+pub mod vote;
 mod vote_threshold;
 pub mod weights;
 pub use conviction::Conviction;
@@ -659,7 +659,7 @@ pub mod pallet {
 				);
 			}
 
-			T::Currency::reserve(&who, value)?;
+			T::MultiCurrency::reserve(STAKING_CURRENCY_ID, &who, value)?;
 			PublicPropCount::<T>::put(index + 1);
 			<DepositOf<T>>::insert(index, (&[&who][..], value));
 
@@ -690,7 +690,7 @@ pub mod pallet {
 			let seconds = Self::len_of_deposit_of(proposal).ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(seconds <= seconds_upper_bound, Error::<T>::WrongUpperBound);
 			let mut deposit = Self::deposit_of(proposal).ok_or(Error::<T>::ProposalMissing)?;
-			T::Currency::reserve(&who, deposit.1)?;
+			T::MultiCurrency::reserve(STAKING_CURRENCY_ID, &who, deposit.1)?;
 			deposit.0.push(who.clone());
 			<DepositOf<T>>::insert(proposal, deposit);
 			Self::deposit_event(Event::<T>::Seconded { seconder: who, prop_index: proposal });
@@ -1132,7 +1132,7 @@ pub mod pallet {
 			ensure!(expiry.map_or(true, |e| now > e), Error::<T>::Imminent);
 
 			let res =
-				T::Currency::repatriate_reserved(&provider, &who, deposit, BalanceStatus::Free);
+				T::MultiCurrency::repatriate_reserved(STAKING_CURRENCY_ID, &provider, &who, deposit, BalanceStatus::Free);
 			debug_assert!(res.is_ok());
 			<Preimages<T>>::remove(&proposal_hash);
 			Self::deposit_event(Event::<T>::PreimageReaped {
@@ -1545,7 +1545,7 @@ impl<T: Config> Pallet<T> {
 		balance: BalanceOf<T>,
 	) -> Result<u32, DispatchError> {
 		ensure!(who != target, Error::<T>::Nonsense);
-		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
+		ensure!(balance <= T::MultiCurrency::free_balance(STAKING_CURRENCY_ID, &who), Error::<T>::InsufficientFunds);
 		let votes = VotingOf::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
 			let mut old = Voting::Delegating {
 				balance,
@@ -1577,7 +1577,7 @@ impl<T: Config> Pallet<T> {
 			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
-			T::Currency::extend_lock(DEMOCRACY_ID, &who, balance, WithdrawReasons::TRANSFER);
+			T::MultiCurrency::extend_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, &who, balance);
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated { who, target });
@@ -1620,9 +1620,9 @@ impl<T: Config> Pallet<T> {
 			voting.locked_balance()
 		});
 		if lock_needed.is_zero() {
-			T::Currency::remove_lock(DEMOCRACY_ID, who);
+			T::MultiCurrency::remove_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, who);
 		} else {
-			T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReasons::TRANSFER);
+			T::MultiCurrency::set_lock(DEMOCRACY_ID, STAKING_CURRENCY_ID, who, lock_needed);
 		}
 	}
 
@@ -1683,7 +1683,7 @@ impl<T: Config> Pallet<T> {
 			if let Some((depositors, deposit)) = <DepositOf<T>>::take(prop_index) {
 				// refund depositors
 				for d in &depositors {
-					T::Currency::unreserve(d, deposit);
+					T::MultiCurrency::unreserve(STAKING_CURRENCY_ID, d, deposit);
 				}
 				Self::deposit_event(Event::<T>::Tabled {
 					proposal_index: prop_index,
@@ -1707,7 +1707,7 @@ impl<T: Config> Pallet<T> {
 		let preimage = <Preimages<T>>::take(&proposal_hash);
 		if let Some(PreimageStatus::Available { data, provider, deposit, .. }) = preimage {
 			if let Ok(proposal) = T::Proposal::decode(&mut &data[..]) {
-				let err_amount = T::Currency::unreserve(&provider, deposit);
+				let err_amount = T::MultiCurrency::unreserve(STAKING_CURRENCY_ID, &provider, deposit);
 				debug_assert!(err_amount.is_zero());
 				Self::deposit_event(Event::<T>::PreimageUsed { proposal_hash, provider, deposit });
 
@@ -1737,7 +1737,7 @@ impl<T: Config> Pallet<T> {
 		index: ReferendumIndex,
 		status: ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>,
 	) -> bool {
-		let total_issuance = T::Currency::total_issuance();
+		let total_issuance = T::MultiCurrency::total_issuance(STAKING_CURRENCY_ID);
 		let approved = status.threshold.approved(status.tally, total_issuance);
 
 		if approved {
@@ -1789,7 +1789,7 @@ impl<T: Config> Pallet<T> {
 	/// - Db writes: `PublicProps`, `account`, `ReferendumCount`, `DepositOf`, `ReferendumInfoOf`
 	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
 	/// # </weight>
-	fn begin_block(now: T::BlockNumber) -> Weight {
+	pub fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = 0;
 
@@ -1914,7 +1914,7 @@ impl<T: Config> Pallet<T> {
 
 		let deposit = <BalanceOf<T>>::from(encoded_proposal.len() as u32)
 			.saturating_mul(T::PreimageByteDeposit::get());
-		T::Currency::reserve(&who, deposit)?;
+		T::MultiCurrency::reserve(STAKING_CURRENCY_ID, &who, deposit)?;
 
 		let now = <frame_system::Pallet<T>>::block_number();
 		let a = PreimageStatus::Available {

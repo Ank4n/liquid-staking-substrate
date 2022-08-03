@@ -1,16 +1,16 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::{assert_err, assert_ok};
+use frame_support::{assert_err, assert_noop, assert_ok};
 use mock::*;
 use orml_traits::MultiReservableCurrency;
+use primitives::{LIQUID_CURRENCY_ID, STAKING_CURRENCY_ID};
 use substrate_test_utils::assert_eq_uvec;
-use primitives::{STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID};  
 
 #[test]
 fn total_issuance() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(Currencies::total_issuance(STAKING_CURRENCY_ID), 16400);
+		assert_eq!(Currencies::total_issuance(STAKING_CURRENCY_ID), 18400);
 		assert_eq!(Currencies::total_issuance(LIQUID_CURRENCY_ID), 2000);
 	});
 }
@@ -195,5 +195,31 @@ fn request_unbond_after_unbond_duration_works() {
 		assert_eq!(Currencies::free_balance(LIQUID_CURRENCY_ID, &101), 1900);
 		// liquid token is burnt
 		assert_eq!(LiquidStaking::total_liquid_issuance(), 2000 - burn_amount);
+	});
+}
+
+#[test]
+fn democracy_voting_with_liquid_currency_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		let r = begin_referendum();
+		assert_ok!(Democracy::vote_v2(
+			Origin::signed(1),
+			r,
+			aye(1, LIQUID_CURRENCY_ID),
+			LIQUID_CURRENCY_ID
+		));
+	});
+}
+
+#[test]
+fn democracy_voting_with_staking_currency_works() {
+	ExtBuilder::default().build().execute_with(|| {
+		let r = begin_referendum();
+		assert_ok!(Democracy::vote_v2(
+			Origin::signed(1),
+			r,
+			aye(1, STAKING_CURRENCY_ID),
+			STAKING_CURRENCY_ID
+		));
 	});
 }

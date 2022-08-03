@@ -21,7 +21,9 @@ use super::*;
 use crate as pallet_democracy;
 use codec::Encode;
 use frame_support::{
-	assert_noop, assert_ok, ord_parameter_types, parameter_types,
+	assert_noop, assert_ok, ord_parameter_types,
+	pallet_prelude::DispatchResult,
+	parameter_types,
 	traits::{
 		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers,
 	},
@@ -29,6 +31,10 @@ use frame_support::{
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use pallet_balances::{BalanceLock, Error as BalancesError};
+use pallet_democracy::{
+	conviction::Conviction,
+	vote::{AccountVote, Casting, Delegating, Vote, Voting},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -238,7 +244,7 @@ fn set_balance_proposal_hash_and_note(value: u64) -> H256 {
 	let h = BlakeTwo256::hash(&p[..]);
 	match Democracy::note_preimage(Origin::signed(6), p) {
 		Ok(_) => (),
-		Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
+		// Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
 		Err(x) => panic!("{:?}", x),
 	}
 	h
