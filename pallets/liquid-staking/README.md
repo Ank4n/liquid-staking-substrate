@@ -6,7 +6,7 @@
 ## Running the tests
 - `cargo test -p pallet-liquid-staking`
 
-Note: The node is not compiling.
+Note: The node is not compiling. The code is in `working-node` branch. Something weird with the Chain specs that I am trying to fix.
 ## Rubric
 - [x] New stakers can directly stake through this pallet, which controls all the staked dot, and generates a derivative token as well.
 - [x] Simple voting system in the pallet where holders of the derivative token can influence which validators the pallet backs.
