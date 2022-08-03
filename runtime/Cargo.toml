@@ -39,6 +39,10 @@ sp-std = { version = "4.0.0-dev", default-features = false, git = "https://githu
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 sp-version = { version = "5.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
+orml-tokens = { default-features = false, version = '0.4.1-dev', git = "https://github.com/open-web3-stack/open-runtime-module-library", branch = "polkadot-v0.9.26" }
+orml-currencies = { default-features = false, version = '0.4.1-dev', git = "https://github.com/open-web3-stack/open-runtime-module-library", branch = "polkadot-v0.9.26" }
+orml-traits = { default-features = false, version = '0.4.1-dev', git = "https://github.com/open-web3-stack/open-runtime-module-library", branch = "polkadot-v0.9.26" }
+pallet-scheduler = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 
 
 # Used for the node template's RPCs
@@ -49,7 +53,6 @@ pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "..
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
-pallet-treasury = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 pallet-session = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 
 # Used for runtime benchmarking
@@ -79,7 +82,10 @@ std = [
 	"pallet-randomness-collective-flip/std",
 	"pallet-sudo/std",
 	"pallet-liquid-staking/std",
+	"pallet-staking/std",
+	"pallet-collective/std",
 	"pallet-timestamp/std",
+	"pallet-democracy/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
 	"sp-api/std",
@@ -91,9 +97,16 @@ std = [
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-std/std",
+	"sp-staking/std",
 	"sp-transaction-pool/std",
 	"sp-version/std",
-	"pallet-session/std"
+	"pallet-session/std",
+	"sq-primitives/std",
+	'orml-currencies/std',
+    'orml-tokens/std',
+    'orml-traits/std',
+	"pallet-scheduler/std",
+	"frame-election-provider-support/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

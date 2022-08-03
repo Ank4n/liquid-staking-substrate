@@ -18,13 +18,8 @@ use frame_support::storage::IterableStorageMap;
 use orml_traits::{currency::MultiReservableCurrency, MultiCurrency};
 pub use pallet::*;
 
-#[cfg(feature = "std")]
-use sp_runtime::{
-	traits::{AccountIdConversion, Saturating, Zero},
-	ArithmeticError, FixedPointNumber, FixedPointOperand,
-};
 use sp_staking::EraIndex;
-
+use sp_std::{vec, vec::Vec};
 pub use sq_primitives::{CurrencyId, MintRate};
 pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
 
@@ -36,6 +31,10 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::*};
+	use sp_runtime::{
+		traits::{AccountIdConversion, Saturating, Zero},
+		FixedPointNumber, FixedPointOperand, ArithmeticError,
+	};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]

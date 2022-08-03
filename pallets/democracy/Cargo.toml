@@ -43,6 +43,7 @@ std = [
 	"serde",
 	"sp-io/std",
 	"sp-runtime/std",
+	"sq-primitives/std",
 	"sp-std/std",
 ]
 runtime-benchmarks = [

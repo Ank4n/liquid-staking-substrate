@@ -29,6 +29,9 @@ use sp_runtime::{
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
 };
+use sq_primitives::{CurrencyId, STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID, MintRate};  
+use orml_currencies::BasicCurrencyAdapter;
+use orml_traits::parameter_type_with_key;
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -97,7 +100,6 @@ pub mod opaque {
 	pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 	/// Opaque block identifier type.
 	pub type BlockId = generic::BlockId<Block>;
-
 }
 
 impl_opaque_keys! {
@@ -279,11 +281,61 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-/// My configurations.
+/// Liquid staking pallet
+parameter_types! {
+	pub const StakingCurrencyId: CurrencyId = STAKING_CURRENCY_ID;
+	pub const LiquidCurrencyId: CurrencyId = LIQUID_CURRENCY_ID;
+	pub const MyPalletId: PalletId = PalletId(*b"stayquid");
+	pub DefaultMintRate: MintRate = MintRate::saturating_from_rational(10, 1);
+	pub const UnBondWait: EraIndex = 28;
+	pub static BondThreshold: Balance = 0;
+	pub static UnbondThreshold: Balance = 0;
+	pub static MaxValidatorCount: u32 = 5;
+}
 impl pallet_liquid_staking::Config for Runtime {
 	type Event = Event;
+	type PalletId = MyPalletId;
+	type Currency = Currencies;
+	type StakingCurrencyId = StakingCurrencyId;
+	type LiquidCurrencyId = LiquidCurrencyId;
+	type DefaultMintRate = DefaultMintRate;
+	type BondThreshold = BondThreshold;
+	type UnbondThreshold = UnbondThreshold;
+	type MaxValidatorCount = MaxValidatorCount;
 }
 
+parameter_types! {
+	pub const GetNativeCurrencyId: CurrencyId = STAKING_CURRENCY_ID;
+}
+
+impl orml_currencies::Config for Runtime {
+	type MultiCurrency = Tokens;
+	type NativeCurrency = BasicCurrencyAdapter<Test, Balances, Amount, BlockNumber>;
+	type GetNativeCurrencyId = GetNativeCurrencyId;
+	type WeightInfo = ();
+}
+
+parameter_type_with_key! {
+	pub ExistentialDeposits: |_currency_id: CurrencyId| -> Balance {
+		1
+	};
+}
+
+impl orml_tokens::Config for Test {
+	type Event = Event;
+	type Balance = Balance;
+	type Amount = Amount;
+	type CurrencyId = CurrencyId;
+	type WeightInfo = ();
+	type ExistentialDeposits = ExistentialDeposits;
+	type OnDust = ();
+	type OnNewTokenAccount = ();
+	type OnKilledTokenAccount = ();
+	type MaxLocks = ConstU32<2>;
+	type MaxReserves = ConstU32<2>;
+	type ReserveIdentifier = ReserveIdentifier;
+	type DustRemovalWhitelist = Nothing;
+}
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
 where
 	Call: From<C>,
@@ -392,6 +444,9 @@ construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Historical: pallet_session::historical::{Pallet},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Currencies: orml_currencies::{Pallet, Call},
+		Tokens: orml_tokens::{Pallet, Storage, Event<T>, Config<T>},
+		Democracy: pallet_democracy::{Pallet, Storage, Config<T>, Event<T>, Call},
 	}
 );
 

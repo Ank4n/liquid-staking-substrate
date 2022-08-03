@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 use sp_runtime::{FixedU128};
 
 pub type MintRate = FixedU128;
