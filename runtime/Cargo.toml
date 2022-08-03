@@ -42,7 +42,7 @@ sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://g
 orml-tokens = { default-features = false, version = '0.4.1-dev', git = "https://github.com/open-web3-stack/open-runtime-module-library", branch = "polkadot-v0.9.26" }
 orml-currencies = { default-features = false, version = '0.4.1-dev', git = "https://github.com/open-web3-stack/open-runtime-module-library", branch = "polkadot-v0.9.26" }
 orml-traits = { default-features = false, version = '0.4.1-dev', git = "https://github.com/open-web3-stack/open-runtime-module-library", branch = "polkadot-v0.9.26" }
-pallet-scheduler = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
+pallet-scheduler = { default-features = false, version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 
 
 # Used for the node template's RPCs

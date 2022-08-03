@@ -14,6 +14,12 @@ pub const CENTS: Balance = UNITS / 100;
 pub const MILLICENTS: Balance = CENTS / 1_000;
 pub const GRAND: Balance = CENTS * 100_000;
 
+pub type Amount = i128;
+// pub type BlockNumber = u64;
+pub type ReserveIdentifier = [u8; 8];
+
+use sp_runtime::FixedPointNumber;
+
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -42,13 +48,13 @@ pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
 		ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness, StorageInfo,
-		U128CurrencyToVote,
+		U128CurrencyToVote, Nothing, EqualPrivilegeOnly
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 		IdentityFee, Weight,
 	},
-	StorageValue,
+	StorageValue, PalletId,
 };
 pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
@@ -78,11 +84,11 @@ pub type Index = u32;
 pub type Hash = sp_core::H256;
 
 use frame_election_provider_support::{onchain, SequentialPhragmen};
-use frame_system::{EnsureRoot, EnsureSignedBy};
+use frame_system::{EnsureRoot, EnsureSignedBy, EnsureSigned};
 /// My Imports
 pub use pallet_liquid_staking;
 pub use pallet_staking::StakerStatus;
-use sp_staking::SessionIndex;
+use sp_staking::{SessionIndex, EraIndex};
 type DummyValidatorId = AccountId;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
@@ -281,16 +287,16 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-/// Liquid staking pallet
+// Liquid staking pallet
 parameter_types! {
 	pub const StakingCurrencyId: CurrencyId = STAKING_CURRENCY_ID;
 	pub const LiquidCurrencyId: CurrencyId = LIQUID_CURRENCY_ID;
 	pub const MyPalletId: PalletId = PalletId(*b"stayquid");
 	pub DefaultMintRate: MintRate = MintRate::saturating_from_rational(10, 1);
 	pub const UnBondWait: EraIndex = 28;
-	pub static BondThreshold: Balance = 0;
-	pub static UnbondThreshold: Balance = 0;
-	pub static MaxValidatorCount: u32 = 5;
+	pub BondThreshold: Balance = 0;
+	pub UnbondThreshold: Balance = 0;
+	pub MaxValidatorCount: u32 = 5;
 }
 impl pallet_liquid_staking::Config for Runtime {
 	type Event = Event;
@@ -310,7 +316,7 @@ parameter_types! {
 
 impl orml_currencies::Config for Runtime {
 	type MultiCurrency = Tokens;
-	type NativeCurrency = BasicCurrencyAdapter<Test, Balances, Amount, BlockNumber>;
+	type NativeCurrency = BasicCurrencyAdapter<Runtime, Balances, Amount, BlockNumber>;
 	type GetNativeCurrencyId = GetNativeCurrencyId;
 	type WeightInfo = ();
 }
@@ -321,7 +327,7 @@ parameter_type_with_key! {
 	};
 }
 
-impl orml_tokens::Config for Test {
+impl orml_tokens::Config for Runtime {
 	type Event = Event;
 	type Balance = Balance;
 	type Amount = Amount;
@@ -342,6 +348,65 @@ where
 {
 	type OverarchingCall = Call;
 	type Extrinsic = UncheckedExtrinsic;
+}
+
+parameter_types! {
+	pub const LaunchPeriod: BlockNumber = 2;
+	pub const VotingPeriod: BlockNumber = 2;
+	pub const VoteLockingPeriod: BlockNumber = 2;
+	pub const FastTrackVotingPeriod: BlockNumber = 2;
+	pub const EnactmentPeriod: BlockNumber = 2;
+	pub const CooloffPeriod: BlockNumber = 2;
+	pub const MinimumDeposit: Balance = 1;
+	pub const MaxVotes: u32 = 10;
+	pub const MaxProposals: u32 = 10;
+	pub const PreimageByteDeposit: Balance = 0;
+	pub const InstantAllowed: bool = false;
+}
+impl pallet_democracy::Config for Runtime {
+	type Proposal = Call;
+	type Event = Event;
+	type Currency = Balances;
+	type MultiCurrency = Currencies;
+	type EnactmentPeriod = EnactmentPeriod;
+	type LaunchPeriod = LaunchPeriod;
+	type VotingPeriod = VotingPeriod;
+	type VoteLockingPeriod = VoteLockingPeriod;
+	type FastTrackVotingPeriod = FastTrackVotingPeriod;
+	type MinimumDeposit = MinimumDeposit;
+	type ExternalOrigin = EnsureRoot<AccountId>;
+	type ExternalMajorityOrigin = EnsureRoot<AccountId>;
+	type ExternalDefaultOrigin = EnsureRoot<AccountId>;
+	type FastTrackOrigin = EnsureRoot<AccountId>;
+	type InstantOrigin = EnsureRoot<AccountId>;
+	type CancellationOrigin = EnsureRoot<AccountId>;
+	type CancelProposalOrigin = EnsureRoot<AccountId>;
+	type BlacklistOrigin = EnsureRoot<AccountId>;
+	type VetoOrigin = EnsureSigned<AccountId>;
+	type CooloffPeriod = CooloffPeriod;
+	type PreimageByteDeposit = PreimageByteDeposit;
+	type Slash = ();
+	type InstantAllowed = InstantAllowed;
+	type Scheduler = Scheduler;
+	type MaxVotes = MaxVotes;
+	type OperationalPreimageOrigin = EnsureSigned<AccountId>;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
+	type MaxProposals = MaxProposals;
+}
+
+impl pallet_scheduler::Config for Runtime {
+	type Event = Event;
+	type Origin = Origin;
+	type PalletsOrigin = OriginCaller;
+	type Call = Call;
+	type MaximumWeight = ();
+	type ScheduleOrigin = EnsureRoot<AccountId>;
+	type MaxScheduledPerBlock = ();
+	type WeightInfo = ();
+	type OriginPrivilegeCmp = EqualPrivilegeOnly; // TODO : Simplest type, maybe there is better ?
+	type PreimageProvider = ();
+	type NoPreimagePostponement = ();
 }
 
 parameter_types! {
@@ -447,6 +512,7 @@ construct_runtime!(
 		Currencies: orml_currencies::{Pallet, Call},
 		Tokens: orml_tokens::{Pallet, Storage, Event<T>, Config<T>},
 		Democracy: pallet_democracy::{Pallet, Storage, Config<T>, Event<T>, Call},
+		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
