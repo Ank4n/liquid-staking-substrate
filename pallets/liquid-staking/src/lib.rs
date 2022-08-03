@@ -25,7 +25,7 @@ use sp_runtime::{
 };
 use sp_staking::EraIndex;
 
-pub use primitives::{CurrencyId, MintRate};
+pub use sq_primitives::{CurrencyId, MintRate};
 pub type BalanceOf<T> = <T as pallet_staking::Config>::CurrencyBalance;
 
 // Waiting period before tokens are unlocked

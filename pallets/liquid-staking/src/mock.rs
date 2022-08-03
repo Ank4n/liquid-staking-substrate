@@ -14,7 +14,6 @@ use pallet_democracy::{
 	conviction::Conviction,
 	vote::{AccountVote, Vote},
 };
-use primitives::MintRate;
 use sp_staking::{EraIndex, SessionIndex};
 
 use crate::mock::sp_api_hidden_includes_construct_runtime::hidden_include::traits::GenesisBuild;
@@ -38,7 +37,7 @@ pub type Amount = i128;
 pub type BlockNumber = u64;
 pub type ReserveIdentifier = [u8; 8];
 
-use primitives::{CurrencyId, STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID};  
+use sq_primitives::{CurrencyId, STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID, MintRate};  
 
 pub const BLOCK_TIME: u64 = 1000;
 pub const INIT_TIMESTAMP: u64 = 30_000;

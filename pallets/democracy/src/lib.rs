@@ -192,7 +192,7 @@ pub mod benchmarking;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
-pub use primitives::{CurrencyId, STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID};
+pub use sq_primitives::{CurrencyId, STAKING_CURRENCY_ID, LIQUID_CURRENCY_ID};
 
 /// The maximum number of vetoers on a single proposal used to compute Weight.
 ///

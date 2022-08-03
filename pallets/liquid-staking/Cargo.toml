@@ -35,7 +35,7 @@ sp-io = { default-features = false, version = "6.0.0", git = "https://github.com
 sp-runtime = { default-features = false, version = "6.0.0", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 sp-std = { version = "4.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.26" }
 orml-traits = { default-features = false, version = '0.4.1-dev', git = "https://github.com/open-web3-stack/open-runtime-module-library", branch = "polkadot-v0.9.26" }
-primitives = { default-features = false, version = '4.0.0-dev', path = "../../primitives" }
+sq-primitives = { default-features = false, version = '4.0.0-dev', path = "../../sq-primitives" }
 
 [dev-dependencies]
 serde_json = { version = "1.0.68" }

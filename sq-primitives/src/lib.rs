@@ -1,6 +1,3 @@
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
 use sp_runtime::{FixedU128};
 
 pub type MintRate = FixedU128;

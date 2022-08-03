@@ -4161,13 +4161,13 @@ dependencies = [
  "pallet-balances",
  "pallet-scheduler",
  "parity-scale-codec",
- "primitives",
  "scale-info",
  "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sq-primitives",
 ]
 
 [[package]]
@@ -4213,7 +4213,6 @@ dependencies = [
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
- "primitives",
  "scale-info",
  "serde",
  "serde_json",
@@ -4223,6 +4222,7 @@ dependencies = [
  "sp-session",
  "sp-staking",
  "sp-std",
+ "sq-primitives",
  "substrate-test-utils",
 ]
 
@@ -4747,23 +4747,6 @@ dependencies = [
  "impl-serde",
  "scale-info",
  "uint",
-]
-
-[[package]]
-name = "primitives"
-version = "4.0.0-dev"
-dependencies = [
- "frame-support",
- "parity-scale-codec",
- "parity-util-mem",
- "scale-info",
- "serde",
- "serde_json",
- "sp-api",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -7351,6 +7334,13 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "sq-primitives"
+version = "4.0.0-dev"
+dependencies = [
+ "sp-runtime",
+]
 
 [[package]]
 name = "ss58-registry"

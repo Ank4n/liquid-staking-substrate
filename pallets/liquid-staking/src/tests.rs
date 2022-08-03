@@ -4,7 +4,7 @@ use super::*;
 use frame_support::{assert_err, assert_ok};
 use mock::*;
 use orml_traits::MultiReservableCurrency;
-use primitives::{LIQUID_CURRENCY_ID, STAKING_CURRENCY_ID};
+use sq_primitives::{LIQUID_CURRENCY_ID, STAKING_CURRENCY_ID};
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
